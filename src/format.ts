@@ -4,6 +4,7 @@ export function yen(value: number): string {
 
 export function shortDate(value: string): string {
   return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
     month: "numeric",
     day: "numeric",
     weekday: "short"

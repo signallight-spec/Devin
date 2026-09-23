@@ -83,7 +83,6 @@ export function ParentScreen() {
   const [rotatedKey, setRotatedKey] = useState("");
 
   const load = useCallback(async () => {
-    setMessage("");
     try {
       const [nextDashboard, achievementResult, ruleResult, paymentResult] =
         await Promise.all([

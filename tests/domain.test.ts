@@ -6,8 +6,13 @@ import {
   localDateInTokyo,
   mondayWeekRange
 } from "../shared/domain";
+import { shortDate } from "../src/format";
 
 describe("学習記録の計算", () => {
+  it("日本時間の日付を実行環境のタイムゾーンに左右されず表示する", () => {
+    expect(shortDate("2026-09-23")).toBe("9/23(水)");
+  });
+
   it("日本時間の日付をUTC境界から計算する", () => {
     expect(localDateInTokyo(new Date("2026-09-22T14:59:59Z"))).toBe("2026-09-22");
     expect(localDateInTokyo(new Date("2026-09-22T15:00:00Z"))).toBe("2026-09-23");
