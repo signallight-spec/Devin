@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import {
   api,
   clearParentToken,
+  generateFamilyKey,
+  getFamilyKey,
   getParentToken,
   setFamilyKey
 } from "../api";
@@ -224,18 +226,31 @@ export function ParentScreen() {
   };
 
   const rotateKey = async () => {
-    if (!window.confirm("現在の家族キーはすぐに使えなくなります。再発行しますか？")) {
+    if (!window.confirm("新しい家族キーを発行します。保存後に古いキーを無効化しますか？")) {
       return;
     }
     setBusy(true);
     setMessage("");
+    const currentFamilyKey = getFamilyKey();
+    const newFamilyKey = generateFamilyKey();
+    setFamilyKey(newFamilyKey);
     try {
-      const result = await api.rotateFamilyKey();
+      const result = await api.rotateFamilyKey(newFamilyKey, currentFamilyKey);
       setFamilyKey(result.familyKey);
+      await api.confirmFamilyKey(result.familyKey).catch(() => undefined);
       setRotatedKey(result.familyKey);
       setTone("success");
       setMessage("家族キーを再発行しました。もう1台にも登録してください。");
     } catch (error) {
+      try {
+        await api.validateFamilyKey(newFamilyKey);
+        setRotatedKey(newFamilyKey);
+        setTone("success");
+        setMessage("家族キーを再発行しました。もう1台にも登録してください。");
+        return;
+      } catch {
+        setFamilyKey(currentFamilyKey);
+      }
       setTone("error");
       setMessage(error instanceof Error ? error.message : "再発行に失敗しました。");
     } finally {

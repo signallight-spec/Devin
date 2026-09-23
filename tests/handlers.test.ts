@@ -157,7 +157,7 @@ beforeEach(async () => {
         "Content-Type": "application/json",
         "X-Bootstrap-Token": "bootstrap-token"
       },
-      body: JSON.stringify({ pin: "1234" })
+      body: JSON.stringify({ pin: "1234", familyKey: "A".repeat(43) })
     }),
     env
   );
@@ -266,6 +266,41 @@ describe("APIハンドラー", () => {
       )
     );
     expect(rejected.status).toBe(400);
+  });
+
+  it("家族キー再発行は確認まで旧キーと新キーの両方を受け付ける", async () => {
+    const token = await parentToken();
+    const newFamilyKey = "B".repeat(43);
+    const rotated = await handleApi(
+      request(
+        "/parent/family-key/rotate",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ familyKey: newFamilyKey })
+        },
+        familyKey,
+        token
+      ),
+      env
+    );
+    expect(rotated.status).toBe(200);
+
+    expect((await handleApi(request("/today", {}, familyKey), env)).status).toBe(200);
+    expect((await handleApi(request("/today", {}, newFamilyKey), env)).status).toBe(200);
+
+    const confirmed = await handleApi(
+      request(
+        "/parent/family-key/confirm",
+        { method: "POST" },
+        newFamilyKey,
+        token
+      ),
+      env
+    );
+    expect(confirmed.status).toBe(204);
+    expect((await handleRequest(request("/today", {}, familyKey))).status).toBe(401);
+    expect((await handleApi(request("/today", {}, newFamilyKey), env)).status).toBe(200);
   });
 
   it("親が未達通知のON/OFFと時刻を変更する", async () => {
@@ -580,6 +615,43 @@ describe("APIハンドラー", () => {
     expect(unlocked.status).toBe(200);
     expect(settings).toEqual({
       pin_failed_attempts: 0,
+      pin_locked_until_utc: null
+    });
+  });
+
+  it("期限切れPINロック後の誤入力は失敗回数を1から数え直す", async () => {
+    testD1.sqlite.exec(`
+      UPDATE app_settings
+      SET
+        pin_failed_attempts = 5,
+        pin_locked_until_utc = '2000-01-01T00:00:00.000Z'
+      WHERE id = 1
+    `);
+    const response = await handleRequest(
+      request(
+        "/parent/session",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: "9999" })
+        },
+        familyKey
+      )
+    );
+    const settings = testD1.sqlite
+      .prepare(
+        `SELECT pin_failed_attempts, pin_locked_until_utc
+         FROM app_settings
+         WHERE id = 1`
+      )
+      .get() as {
+      pin_failed_attempts: number;
+      pin_locked_until_utc: string | null;
+    };
+
+    expect(response.status).toBe(403);
+    expect(settings).toEqual({
+      pin_failed_attempts: 1,
       pin_locked_until_utc: null
     });
   });

@@ -28,6 +28,18 @@ export function setFamilyKey(value: string): void {
   localStorage.setItem(FAMILY_KEY_STORAGE, value);
 }
 
+export function generateFamilyKey(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
 export function clearFamilyKey(): void {
   localStorage.removeItem(FAMILY_KEY_STORAGE);
   sessionStorage.removeItem(PARENT_TOKEN_STORAGE);
@@ -88,6 +100,7 @@ async function apiRequest<T>(
 export const api = {
   setup(input: {
     bootstrapToken: string;
+    familyKey: string;
     pin: string;
     goalMinutes: number;
     baseAmountYen: number;
@@ -206,11 +219,18 @@ export const api = {
       { parent: true }
     );
   },
-  rotateFamilyKey() {
+  rotateFamilyKey(familyKey: string, currentFamilyKey: string) {
     return apiRequest<{ familyKey: string }>(
       "/parent/family-key/rotate",
+      { method: "POST", body: JSON.stringify({ familyKey }) },
+      { parent: true, familyKey: currentFamilyKey }
+    );
+  },
+  confirmFamilyKey(familyKey: string) {
+    return apiRequest<void>(
+      "/parent/family-key/confirm",
       { method: "POST" },
-      { parent: true }
+      { parent: true, familyKey }
     );
   },
   updatePin(newPin: string) {

@@ -87,6 +87,24 @@ class TestD1 {
   prepare(query: string): D1PreparedStatement {
     return new TestStatement(this.sqlite, query) as unknown as D1PreparedStatement;
   }
+
+  async batch<T = unknown>(
+    statements: D1PreparedStatement[]
+  ): Promise<D1Result<T>[]> {
+    const testStatements = statements as unknown as TestStatement[];
+    this.sqlite.exec("BEGIN");
+    try {
+      const results: D1Result<T>[] = [];
+      for (const statement of testStatements) {
+        results.push(await statement.run<T>());
+      }
+      this.sqlite.exec("COMMIT");
+      return results;
+    } catch (error) {
+      this.sqlite.exec("ROLLBACK");
+      throw error;
+    }
+  }
 }
 
 let database: TestD1;
@@ -130,6 +148,44 @@ describe("未達通知Worker", () => {
       local_date: "2026-09-23",
       sent_count: 1
     });
+  });
+
+  it("失敗した購読だけを後続Cronで再試行する", async () => {
+    database.sqlite.exec(`
+      INSERT INTO push_subscriptions (
+        endpoint, p256dh, auth, created_at_utc, updated_at_utc
+      ) VALUES (
+        'https://fcm.googleapis.com/fcm/send/retry', 'key', 'auth',
+        '2026-09-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z'
+      );
+    `);
+    let retryFailed = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const endpoint = String(input);
+      if (endpoint.endsWith("/retry") && !retryFailed) {
+        retryFailed = true;
+        return new Response(null, { status: 503 });
+      }
+      return new Response(null, { status: 201 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const now = new Date("2026-09-23T11:05:00.000Z");
+
+    await expect(processReminder(env, now)).resolves.toBe(1);
+    await expect(processReminder(env, now)).resolves.toBe(1);
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const deliveries = database.sqlite
+      .prepare(
+        `SELECT endpoint
+         FROM notification_delivery_subscriptions
+         ORDER BY endpoint`
+      )
+      .all();
+    expect(deliveries).toEqual([
+      { endpoint: "https://fcm.googleapis.com/fcm/send/retry" },
+      { endpoint: "https://fcm.googleapis.com/fcm/send/test" }
+    ]);
   });
 
   it("当日の達成があれば通知しない", async () => {

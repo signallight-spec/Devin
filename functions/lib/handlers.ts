@@ -58,6 +58,7 @@ interface LatestStreakRow {
 
 const MAX_PIN_ATTEMPTS = 5;
 const PIN_LOCK_MINUTES = 5;
+const FAMILY_KEY_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const PUSH_SERVICE_HOSTS = new Set([
   "fcm.googleapis.com",
   "updates.push.services.mozilla.com",
@@ -102,10 +103,24 @@ async function requireFamilyKey(
   const familyKey = request.headers.get("x-family-key");
   if (
     !familyKey ||
-    !(await familyKeyMatches(familyKey, settings.family_key_hash))
+    (!(await familyKeyMatches(familyKey, settings.family_key_hash)) &&
+      (!settings.pending_family_key_hash ||
+        !(await familyKeyMatches(familyKey, settings.pending_family_key_hash))))
   ) {
     throw new HttpError(401, "INVALID_FAMILY_KEY", "家族キーが無効です。");
   }
+}
+
+async function pendingFamilyKeyMatches(
+  request: Request,
+  settings: AppSettingsRow
+): Promise<boolean> {
+  const familyKey = request.headers.get("x-family-key");
+  return Boolean(
+    familyKey &&
+      settings.pending_family_key_hash &&
+      (await familyKeyMatches(familyKey, settings.pending_family_key_hash))
+  );
 }
 
 async function latestStreak(
@@ -141,12 +156,17 @@ async function handleSetup(request: Request, env: Env, now: Date): Promise<Respo
   const body = await readJsonObject(request);
   rejectUnknownKeys(body, [
     "pin",
+    "familyKey",
     "goalMinutes",
     "baseAmountYen",
     "bonusIntervalDays",
     "bonusAmountYen"
   ]);
   const pin = requiredString(body, "pin", /^\d{4}$/);
+  const suppliedFamilyKey = optionalTrimmedString(body, "familyKey", 64);
+  if (suppliedFamilyKey && !FAMILY_KEY_PATTERN.test(suppliedFamilyKey)) {
+    throw new HttpError(400, "INVALID_INPUT", "familyKeyが正しくありません。");
+  }
   const goalMinutes = integerInRange(body, "goalMinutes", 5, 180, 25);
   if (!isGoalMinutes(goalMinutes)) {
     throw new HttpError(
@@ -170,7 +190,7 @@ async function handleSetup(request: Request, env: Env, now: Date): Promise<Respo
     100_000,
     300
   );
-  const familyKey = generateFamilyKey();
+  const familyKey = suppliedFamilyKey ?? generateFamilyKey();
   const characterSeed = randomCharacterSeed();
   const [familyKeyHash, pinHash] = await Promise.all([
     sha256Hex(familyKey),
@@ -520,10 +540,11 @@ async function handleParentSession(
   const body = await readJsonObject(request);
   rejectUnknownKeys(body, ["pin"]);
   const pin = requiredString(body, "pin", /^\d{4}$/);
-  if (
+  const nowIso = now.toISOString();
+  const activeLock =
     settings.pin_locked_until_utc &&
-    Date.parse(settings.pin_locked_until_utc) > now.getTime()
-  ) {
+    Date.parse(settings.pin_locked_until_utc) > now.getTime();
+  if (activeLock) {
     throw new HttpError(
       429,
       "PIN_LOCKED",
@@ -538,15 +559,27 @@ async function handleParentSession(
       .prepare(
         `UPDATE app_settings
          SET
-           pin_failed_attempts = pin_failed_attempts + 1,
+           pin_failed_attempts = CASE
+             WHEN pin_locked_until_utc IS NOT NULL
+              AND pin_locked_until_utc <= ?
+             THEN 1
+             ELSE pin_failed_attempts + 1
+           END,
            pin_locked_until_utc = CASE
-             WHEN pin_failed_attempts + 1 >= ? THEN ?
+             WHEN (
+               CASE
+                 WHEN pin_locked_until_utc IS NOT NULL
+                  AND pin_locked_until_utc <= ?
+                 THEN 1
+                 ELSE pin_failed_attempts + 1
+               END
+             ) >= ? THEN ?
              ELSE NULL
            END,
            updated_at_utc = ?
          WHERE id = 1`
       )
-      .bind(MAX_PIN_ATTEMPTS, lockedUntil, now.toISOString())
+      .bind(nowIso, nowIso, MAX_PIN_ATTEMPTS, lockedUntil, nowIso)
       .run();
     const updated = await getSettings(env.DB);
     if (
@@ -916,22 +949,63 @@ async function handleExport(env: Env): Promise<Response> {
 }
 
 async function handleRotateFamilyKey(
+  request: Request,
   env: Env,
   now: Date
 ): Promise<Response> {
-  const familyKey = generateFamilyKey();
+  const body = await readJsonObject(request);
+  rejectUnknownKeys(body, ["familyKey"]);
+  const suppliedFamilyKey = optionalTrimmedString(body, "familyKey", 64);
+  if (suppliedFamilyKey && !FAMILY_KEY_PATTERN.test(suppliedFamilyKey)) {
+    throw new HttpError(400, "INVALID_INPUT", "familyKeyが正しくありません。");
+  }
+  const familyKey = suppliedFamilyKey ?? generateFamilyKey();
   const familyKeyHash = await sha256Hex(familyKey);
+  await env.DB
+    .prepare(
+      `UPDATE app_settings
+       SET
+         pending_family_key_hash = ?,
+         pending_family_key_created_at_utc = ?,
+         updated_at_utc = ?
+       WHERE id = 1`
+    )
+    .bind(familyKeyHash, now.toISOString(), now.toISOString())
+    .run();
+  return json({ familyKey });
+}
+
+async function handleConfirmFamilyKey(
+  request: Request,
+  env: Env,
+  settings: AppSettingsRow,
+  now: Date
+): Promise<Response> {
+  if (!settings.pending_family_key_hash) {
+    return empty();
+  }
+  if (!(await pendingFamilyKeyMatches(request, settings))) {
+    throw new HttpError(
+      409,
+      "PENDING_FAMILY_KEY_REQUIRED",
+      "新しい家族キーで確認してください。"
+    );
+  }
   await env.DB.batch([
     env.DB
       .prepare(
         `UPDATE app_settings
-         SET family_key_hash = ?, updated_at_utc = ?
+         SET
+           family_key_hash = pending_family_key_hash,
+           pending_family_key_hash = NULL,
+           pending_family_key_created_at_utc = NULL,
+           updated_at_utc = ?
          WHERE id = 1`
       )
-      .bind(familyKeyHash, now.toISOString()),
+      .bind(now.toISOString()),
     env.DB.prepare("DELETE FROM push_subscriptions")
   ]);
-  return json({ familyKey });
+  return empty();
 }
 
 async function handlePinUpdate(
@@ -1031,7 +1105,10 @@ export async function handleApi(request: Request, env: Env): Promise<Response> {
     return handleExport(env);
   }
   if (path === "/parent/family-key/rotate" && method === "POST") {
-    return handleRotateFamilyKey(env, now);
+    return handleRotateFamilyKey(request, env, now);
+  }
+  if (path === "/parent/family-key/confirm" && method === "POST") {
+    return handleConfirmFamilyKey(request, env, settings, now);
   }
   if (path === "/parent/pin" && method === "PATCH") {
     return handlePinUpdate(request, env, now);

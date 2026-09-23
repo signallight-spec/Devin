@@ -10,6 +10,8 @@ export interface AppSettingsRow {
   timezone: string;
   goal_minutes: number;
   family_key_hash: string;
+  pending_family_key_hash: string | null;
+  pending_family_key_created_at_utc: string | null;
   pin_hash: string;
   pin_failed_attempts: number;
   pin_locked_until_utc: string | null;

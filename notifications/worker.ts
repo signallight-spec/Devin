@@ -85,13 +85,7 @@ export async function processReminder(
   if (achievement) {
     return 0;
   }
-  const subscriptions = await env.DB
-    .prepare("SELECT endpoint, p256dh, auth FROM push_subscriptions")
-    .all<SubscriptionRow>();
-  if (subscriptions.results.length === 0) {
-    return 0;
-  }
-  const claim = await env.DB
+  await env.DB
     .prepare(
       `INSERT OR IGNORE INTO notification_deliveries
         (local_date, claimed_at_utc, sent_count)
@@ -99,7 +93,18 @@ export async function processReminder(
     )
     .bind(timing.localDate, now.toISOString())
     .run();
-  if (!claim.meta.changes) {
+  const subscriptions = await env.DB
+    .prepare(
+      `SELECT ps.endpoint, ps.p256dh, ps.auth
+       FROM push_subscriptions ps
+       LEFT JOIN notification_delivery_subscriptions nds
+         ON nds.local_date = ?
+        AND nds.endpoint = ps.endpoint
+       WHERE nds.endpoint IS NULL`
+    )
+    .bind(timing.localDate)
+    .all<SubscriptionRow>();
+  if (subscriptions.results.length === 0) {
     return 0;
   }
 
@@ -110,14 +115,22 @@ export async function processReminder(
         const response = await sendNotification(subscription, env);
         if (response.ok) {
           sentCount += 1;
-          await env.DB
-            .prepare(
-              `UPDATE push_subscriptions
-               SET last_success_at_utc = ?
-               WHERE endpoint = ?`
-            )
-            .bind(now.toISOString(), subscription.endpoint)
-            .run();
+          await env.DB.batch([
+            env.DB
+              .prepare(
+                `INSERT OR IGNORE INTO notification_delivery_subscriptions
+                  (local_date, endpoint, sent_at_utc)
+                 VALUES (?, ?, ?)`
+              )
+              .bind(timing.localDate, subscription.endpoint, now.toISOString()),
+            env.DB
+              .prepare(
+                `UPDATE push_subscriptions
+                 SET last_success_at_utc = ?
+                 WHERE endpoint = ?`
+              )
+              .bind(now.toISOString(), subscription.endpoint)
+          ]);
           return;
         }
         if (response.status === 404 || response.status === 410) {
@@ -134,10 +147,14 @@ export async function processReminder(
   await env.DB
     .prepare(
       `UPDATE notification_deliveries
-       SET sent_count = ?
+       SET sent_count = (
+         SELECT COUNT(*)
+         FROM notification_delivery_subscriptions
+         WHERE local_date = ?
+       )
        WHERE local_date = ?`
     )
-    .bind(sentCount, timing.localDate)
+    .bind(timing.localDate, timing.localDate)
     .run();
   return sentCount;
 }

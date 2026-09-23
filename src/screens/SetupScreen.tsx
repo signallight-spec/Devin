@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api, setFamilyKey } from "../api";
+import { api, ApiError, clearFamilyKey, generateFamilyKey, setFamilyKey } from "../api";
 import { StatusMessage } from "../components/StatusMessage";
 
 export function SetupScreen({ onReady }: { onReady: () => void }) {
@@ -44,9 +44,12 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
   const setup = async () => {
     setBusy(true);
     setMessage("");
+    const familyKey = generateFamilyKey();
+    setFamilyKey(familyKey);
     try {
       const result = await api.setup({
         bootstrapToken,
+        familyKey,
         pin,
         goalMinutes: 25,
         baseAmountYen: 100,
@@ -56,6 +59,17 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
       setFamilyKey(result.familyKey);
       setGeneratedKey(result.familyKey);
     } catch (error) {
+      if (error instanceof ApiError && error.code === "ALREADY_SETUP") {
+        try {
+          await api.validateFamilyKey(familyKey);
+          setGeneratedKey(familyKey);
+          return;
+        } catch {
+          clearFamilyKey();
+        }
+      } else {
+        clearFamilyKey();
+      }
       setMessage(error instanceof Error ? error.message : "初期設定に失敗しました。");
     } finally {
       setBusy(false);
