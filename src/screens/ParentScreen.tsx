@@ -83,6 +83,7 @@ export function ParentScreen() {
   });
   const [newPin, setNewPin] = useState("");
   const [rotatedKey, setRotatedKey] = useState("");
+  const [pendingFamilyKey, setPendingFamilyKey] = useState("");
   const [notificationForm, setNotificationForm] = useState({
     enabled: true,
     time: "20:00"
@@ -234,25 +235,59 @@ export function ParentScreen() {
     const currentFamilyKey = getFamilyKey();
     const newFamilyKey = generateFamilyKey();
     setFamilyKey(newFamilyKey);
+    const showSuccess = (familyKey: string) => {
+      setRotatedKey(familyKey);
+      setPendingFamilyKey("");
+      setTone("success");
+      setMessage("家族キーを再発行しました。もう1台にも登録してください。");
+    };
     try {
       const result = await api.rotateFamilyKey(newFamilyKey, currentFamilyKey);
       setFamilyKey(result.familyKey);
-      await api.confirmFamilyKey(result.familyKey).catch(() => undefined);
-      setRotatedKey(result.familyKey);
-      setTone("success");
-      setMessage("家族キーを再発行しました。もう1台にも登録してください。");
+      await api.confirmFamilyKey(result.familyKey);
+      showSuccess(result.familyKey);
     } catch (error) {
+      let newKeyWorks = false;
       try {
         await api.validateFamilyKey(newFamilyKey);
-        setRotatedKey(newFamilyKey);
-        setTone("success");
-        setMessage("家族キーを再発行しました。もう1台にも登録してください。");
+        newKeyWorks = true;
+        await api.confirmFamilyKey(newFamilyKey);
+        showSuccess(newFamilyKey);
         return;
       } catch {
-        setFamilyKey(currentFamilyKey);
+        if (!newKeyWorks) {
+          setFamilyKey(currentFamilyKey);
+          setTone("error");
+          setMessage(error instanceof Error ? error.message : "再発行に失敗しました。");
+          return;
+        }
       }
       setTone("error");
-      setMessage(error instanceof Error ? error.message : "再発行に失敗しました。");
+      setRotatedKey(newFamilyKey);
+      setPendingFamilyKey(newFamilyKey);
+      setMessage(
+        "新しい家族キーは保存されましたが、古いキーの無効化を確認できませんでした。通信を確認して再試行してください。"
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmRotatedKey = async () => {
+    setBusy(true);
+    setMessage("");
+    try {
+      await api.confirmFamilyKey(pendingFamilyKey);
+      setPendingFamilyKey("");
+      setTone("success");
+      setMessage("古い家族キーを無効化しました。");
+    } catch (error) {
+      setTone("error");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "古い家族キーの無効化に失敗しました。"
+      );
     } finally {
       setBusy(false);
     }
@@ -466,6 +501,16 @@ export function ParentScreen() {
             >
               コピー
             </button>
+            {pendingFamilyKey && (
+              <button
+                className="text-button"
+                disabled={busy}
+                onClick={confirmRotatedKey}
+                type="button"
+              >
+                古いキーの無効化を再試行
+              </button>
+            )}
           </div>
         )}
         <div className="button-row">

@@ -1,6 +1,7 @@
 import { HttpError } from "./http";
 
 const encoder = new TextEncoder();
+const PIN_ITERATIONS = 100_000;
 
 function base64Url(bytes: Uint8Array): string {
   let binary = "";
@@ -73,12 +74,12 @@ export async function hashPin(pin: string): Promise<string> {
       name: "PBKDF2",
       hash: "SHA-256",
       salt,
-      iterations: 100_000
+      iterations: PIN_ITERATIONS
     },
     key,
     256
   );
-  return `pbkdf2$100000$${base64Url(salt)}$${base64Url(new Uint8Array(derived))}`;
+  return `pbkdf2$${PIN_ITERATIONS}$${base64Url(salt)}$${base64Url(new Uint8Array(derived))}`;
 }
 
 export async function verifyPin(pin: string, stored: string): Promise<boolean> {
@@ -86,7 +87,7 @@ export async function verifyPin(pin: string, stored: string): Promise<boolean> {
   const iterations = Number(iterationText);
   if (
     algorithm !== "pbkdf2" ||
-    !Number.isInteger(iterations) ||
+    iterations !== PIN_ITERATIONS ||
     !saltText ||
     !expectedText
   ) {

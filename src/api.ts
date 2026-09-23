@@ -9,6 +9,7 @@ import type {
 
 const FAMILY_KEY_STORAGE = "study-habit-family-key";
 const PARENT_TOKEN_STORAGE = "study-habit-parent-token";
+const SETTLEMENT_KEY_STORAGE = "study-habit-settlement-key";
 
 export class ApiError extends Error {
   constructor(
@@ -209,15 +210,27 @@ export const api = {
       { parent: true }
     );
   },
-  settle() {
-    return apiRequest<Payment>(
-      "/parent/payments/settle",
-      {
-        method: "POST",
-        headers: { "Idempotency-Key": crypto.randomUUID() }
-      },
-      { parent: true }
-    );
+  async settle() {
+    const idempotencyKey =
+      localStorage.getItem(SETTLEMENT_KEY_STORAGE) ?? crypto.randomUUID();
+    localStorage.setItem(SETTLEMENT_KEY_STORAGE, idempotencyKey);
+    try {
+      const payment = await apiRequest<Payment>(
+        "/parent/payments/settle",
+        {
+          method: "POST",
+          headers: { "Idempotency-Key": idempotencyKey }
+        },
+        { parent: true }
+      );
+      localStorage.removeItem(SETTLEMENT_KEY_STORAGE);
+      return payment;
+    } catch (error) {
+      if (error instanceof ApiError && error.status < 500) {
+        localStorage.removeItem(SETTLEMENT_KEY_STORAGE);
+      }
+      throw error;
+    }
   },
   rotateFamilyKey(familyKey: string, currentFamilyKey: string) {
     return apiRequest<{ familyKey: string }>(
