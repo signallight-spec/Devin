@@ -82,7 +82,10 @@ export function ParentScreen() {
   const [newPin, setNewPin] = useState("");
   const [rotatedKey, setRotatedKey] = useState("");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (preserveMessage = false) => {
+    if (!preserveMessage) {
+      setMessage("");
+    }
     try {
       const [nextDashboard, achievementResult, ruleResult, paymentResult] =
         await Promise.all([
@@ -127,7 +130,7 @@ export function ParentScreen() {
       const payment = await api.settle();
       setTone("success");
       setMessage(`${yen(payment.amountYen)}を支払い済みにしました。`);
-      await load();
+      await load(true);
     } catch (error) {
       setTone("error");
       setMessage(error instanceof Error ? error.message : "精算に失敗しました。");
@@ -143,7 +146,7 @@ export function ParentScreen() {
       await api.createRule(ruleForm);
       setTone("success");
       setMessage("新しい小遣いルールを保存しました。過去分は変わりません。");
-      await load();
+      await load(true);
     } catch (error) {
       setTone("error");
       setMessage(error instanceof Error ? error.message : "保存に失敗しました。");
