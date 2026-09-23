@@ -1,5 +1,6 @@
 import {
   addLocalDays,
+  calculateCharacterState,
   calculateReward,
   calculateStreak,
   displayedStreak,
@@ -57,6 +58,17 @@ interface LatestStreakRow {
 
 const MAX_PIN_ATTEMPTS = 5;
 const PIN_LOCK_MINUTES = 5;
+const PUSH_SERVICE_HOSTS = new Set([
+  "fcm.googleapis.com",
+  "updates.push.services.mozilla.com",
+  "web.push.apple.com"
+]);
+
+function randomCharacterSeed(): number {
+  const values = new Uint32Array(1);
+  crypto.getRandomValues(values);
+  return values[0] % 2_147_483_647 || 1;
+}
 
 function normalizedPath(url: URL): string {
   const withoutPrefix = url.pathname.replace(/^\/api/, "");
@@ -68,6 +80,11 @@ function normalizedPath(url: URL): string {
 
 function isGoalMinutes(value: number): boolean {
   return value >= 5 && value <= 180 && value % 5 === 0;
+}
+
+function isNotificationTime(value: string): boolean {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value);
+  return Boolean(match && Number(match[2]) % 5 === 0);
 }
 
 function requireRule(
@@ -154,6 +171,7 @@ async function handleSetup(request: Request, env: Env, now: Date): Promise<Respo
     300
   );
   const familyKey = generateFamilyKey();
+  const characterSeed = randomCharacterSeed();
   const [familyKeyHash, pinHash] = await Promise.all([
     sha256Hex(familyKey),
     hashPin(pin)
@@ -166,10 +184,17 @@ async function handleSetup(request: Request, env: Env, now: Date): Promise<Respo
         .prepare(
           `INSERT INTO app_settings
             (id, timezone, goal_minutes, family_key_hash, pin_hash,
-             created_at_utc, updated_at_utc)
-           VALUES (1, 'Asia/Tokyo', ?, ?, ?, ?, ?)`
+             character_seed, created_at_utc, updated_at_utc)
+           VALUES (1, 'Asia/Tokyo', ?, ?, ?, ?, ?, ?)`
         )
-        .bind(goalMinutes, familyKeyHash, pinHash, nowIso, nowIso),
+        .bind(
+          goalMinutes,
+          familyKeyHash,
+          pinHash,
+          characterSeed,
+          nowIso,
+          nowIso
+        ),
       env.DB
         .prepare(
           `INSERT INTO allowance_rules
@@ -207,13 +232,16 @@ async function handleToday(
 ): Promise<Response> {
   const nowIso = now.toISOString();
   const today = localDateInTokyo(now);
-  const [rule, achievement, currentStreakDays] = await Promise.all([
+  const [rule, achievement, currentStreakDays, total] = await Promise.all([
     getCurrentRule(env.DB, nowIso),
     env.DB
       .prepare(`${ACHIEVEMENT_WITH_PAID} WHERE a.local_date = ? LIMIT 1`)
       .bind(today)
       .first<AchievementRow>(),
-    latestStreak(env.DB, today)
+    latestStreak(env.DB, today),
+    env.DB
+      .prepare("SELECT COUNT(*) AS count FROM achievements")
+      .first<{ count: number }>()
   ]);
   requireRule(rule);
   return json({
@@ -221,8 +249,82 @@ async function handleToday(
     goalMinutes: settings.goal_minutes,
     currentStreakDays,
     achievement: achievement ? mapAchievement(achievement) : null,
-    allowanceRule: mapRule(rule)
+    allowanceRule: mapRule(rule),
+    character: calculateCharacterState(
+      total?.count ?? 0,
+      currentStreakDays,
+      settings.character_seed
+    ),
+    notification: {
+      enabled: Boolean(settings.notifications_enabled),
+      time: settings.notification_time,
+      available: Boolean(env.VAPID_PUBLIC_KEY),
+      publicKey: env.VAPID_PUBLIC_KEY ?? null
+    }
   });
+}
+
+function subscriptionValues(body: Record<string, unknown>): {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+} {
+  rejectUnknownKeys(body, ["endpoint", "p256dh", "auth"]);
+  const endpoint = requiredString(body, "endpoint");
+  const p256dh = requiredString(body, "p256dh");
+  const auth = requiredString(body, "auth");
+  let parsedEndpoint: URL;
+  try {
+    parsedEndpoint = new URL(endpoint);
+  } catch {
+    throw new HttpError(400, "INVALID_INPUT", "通知先が正しくありません。");
+  }
+  if (
+    parsedEndpoint.protocol !== "https:" ||
+    !PUSH_SERVICE_HOSTS.has(parsedEndpoint.hostname) ||
+    endpoint.length > 2048 ||
+    p256dh.length > 512 ||
+    auth.length > 512
+  ) {
+    throw new HttpError(400, "INVALID_INPUT", "通知先が正しくありません。");
+  }
+  return { endpoint, p256dh, auth };
+}
+
+async function handlePushSubscriptionPost(
+  request: Request,
+  env: Env,
+  now: Date
+): Promise<Response> {
+  const values = subscriptionValues(await readJsonObject(request));
+  const nowIso = now.toISOString();
+  await env.DB
+    .prepare(
+      `INSERT INTO push_subscriptions
+        (endpoint, p256dh, auth, created_at_utc, updated_at_utc)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(endpoint) DO UPDATE SET
+         p256dh = excluded.p256dh,
+         auth = excluded.auth,
+         updated_at_utc = excluded.updated_at_utc`
+    )
+    .bind(values.endpoint, values.p256dh, values.auth, nowIso, nowIso)
+    .run();
+  return empty();
+}
+
+async function handlePushSubscriptionDelete(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  const body = await readJsonObject(request);
+  rejectUnknownKeys(body, ["endpoint"]);
+  const endpoint = requiredString(body, "endpoint");
+  await env.DB
+    .prepare("DELETE FROM push_subscriptions WHERE endpoint = ?")
+    .bind(endpoint)
+    .run();
+  return empty();
 }
 
 async function handleCreateAchievement(
@@ -325,7 +427,14 @@ async function handleCalendar(url: URL, env: Env, now: Date): Promise<Response> 
   }
   const today = localDateInTokyo(now);
   const { start, end } = mondayWeekRange(today);
-  const [achievements, weekly, unpaid, currentStreakDays] = await Promise.all([
+  const [
+    achievements,
+    weekly,
+    unpaid,
+    currentStreakDays,
+    total,
+    settings
+  ] = await Promise.all([
     env.DB
       .prepare(
         `${ACHIEVEMENT_WITH_PAID}
@@ -348,15 +457,27 @@ async function handleCalendar(url: URL, env: Env, now: Date): Promise<Response> 
          FROM unpaid_achievements`
       )
       .first<{ amount: number }>(),
-    latestStreak(env.DB, today)
+    latestStreak(env.DB, today),
+    env.DB
+      .prepare("SELECT COUNT(*) AS count FROM achievements")
+      .first<{ count: number }>(),
+    getSettings(env.DB)
   ]);
+  if (!settings) {
+    throw new HttpError(409, "SETUP_REQUIRED", "初期設定が必要です。");
+  }
   return json({
     month,
     currentStreakDays,
     weeklyAchievementCount: weekly?.count ?? 0,
     weeklyEarnedYen: weekly?.amount ?? 0,
     unpaidBalanceYen: unpaid?.amount ?? 0,
-    achievements: achievements.results.map(mapAchievement)
+    achievements: achievements.results.map(mapAchievement),
+    character: calculateCharacterState(
+      total?.count ?? 0,
+      currentStreakDays,
+      settings.character_seed
+    )
   });
 }
 
@@ -458,7 +579,7 @@ async function handleParentSession(
 
 async function handleParentDashboard(env: Env, now: Date): Promise<Response> {
   const today = localDateInTokyo(now);
-  const [aggregate, rule, currentStreakDays] = await Promise.all([
+  const [aggregate, rule, currentStreakDays, settings] = await Promise.all([
     env.DB
       .prepare(
         `SELECT
@@ -470,17 +591,53 @@ async function handleParentDashboard(env: Env, now: Date): Promise<Response> {
       )
       .first<AggregateRow>(),
     getCurrentRule(env.DB, now.toISOString()),
-    latestStreak(env.DB, today)
+    latestStreak(env.DB, today),
+    getSettings(env.DB)
   ]);
   requireRule(rule);
+  if (!settings) {
+    throw new HttpError(409, "SETUP_REQUIRED", "初期設定が必要です。");
+  }
   return json({
     unpaidBalanceYen: aggregate?.amount ?? 0,
     unpaidAchievementCount: aggregate?.count ?? 0,
     currentStreakDays,
     oldestUnpaidDate: aggregate?.oldest ?? null,
     newestUnpaidDate: aggregate?.newest ?? null,
-    currentAllowanceRule: mapRule(rule)
+    currentAllowanceRule: mapRule(rule),
+    notificationSettings: {
+      enabled: Boolean(settings.notifications_enabled),
+      time: settings.notification_time
+    }
   });
+}
+
+async function handleNotificationSettingsUpdate(
+  request: Request,
+  env: Env,
+  now: Date
+): Promise<Response> {
+  const body = await readJsonObject(request);
+  rejectUnknownKeys(body, ["enabled", "time"]);
+  if (typeof body.enabled !== "boolean" || typeof body.time !== "string") {
+    throw new HttpError(400, "INVALID_INPUT", "通知設定が正しくありません。");
+  }
+  if (!isNotificationTime(body.time)) {
+    throw new HttpError(
+      400,
+      "INVALID_INPUT",
+      "通知時刻は5分刻みで指定してください。"
+    );
+  }
+  await env.DB
+    .prepare(
+      `UPDATE app_settings
+       SET notifications_enabled = ?, notification_time = ?, updated_at_utc = ?
+       WHERE id = 1`
+    )
+    .bind(body.enabled ? 1 : 0, body.time, now.toISOString())
+    .run();
+  return json({ enabled: body.enabled, time: body.time });
 }
 
 async function handleParentAchievements(url: URL, env: Env): Promise<Response> {
@@ -764,14 +921,16 @@ async function handleRotateFamilyKey(
 ): Promise<Response> {
   const familyKey = generateFamilyKey();
   const familyKeyHash = await sha256Hex(familyKey);
-  await env.DB
-    .prepare(
-      `UPDATE app_settings
-       SET family_key_hash = ?, updated_at_utc = ?
-       WHERE id = 1`
-    )
-    .bind(familyKeyHash, now.toISOString())
-    .run();
+  await env.DB.batch([
+    env.DB
+      .prepare(
+        `UPDATE app_settings
+         SET family_key_hash = ?, updated_at_utc = ?
+         WHERE id = 1`
+      )
+      .bind(familyKeyHash, now.toISOString()),
+    env.DB.prepare("DELETE FROM push_subscriptions")
+  ]);
   return json({ familyKey });
 }
 
@@ -838,6 +997,12 @@ export async function handleApi(request: Request, env: Env): Promise<Response> {
   if (path === "/settings/goal" && method === "PATCH") {
     return handleGoalUpdate(request, env, now);
   }
+  if (path === "/push/subscriptions" && method === "POST") {
+    return handlePushSubscriptionPost(request, env, now);
+  }
+  if (path === "/push/subscriptions" && method === "DELETE") {
+    return handlePushSubscriptionDelete(request, env);
+  }
   if (path === "/parent/session" && method === "POST") {
     return handleParentSession(request, env, settings, now);
   }
@@ -852,6 +1017,9 @@ export async function handleApi(request: Request, env: Env): Promise<Response> {
   }
   if (path === "/parent/allowance-rules" && method === "POST") {
     return handleRulesPost(request, env, now);
+  }
+  if (path === "/parent/notifications" && method === "PATCH") {
+    return handleNotificationSettingsUpdate(request, env, now);
   }
   if (path === "/parent/payments" && method === "GET") {
     return handlePaymentsGet(env);

@@ -1,13 +1,21 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const migrationPath = resolve(
+const migrationsDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  "../migrations/0001_initial.sql"
+  "../migrations"
 );
+
+function applyMigrations(database: DatabaseSync): void {
+  for (const file of readdirSync(migrationsDirectory).sort()) {
+    if (file.endsWith(".sql")) {
+      database.exec(readFileSync(resolve(migrationsDirectory, file), "utf8"));
+    }
+  }
+}
 
 let database: DatabaseSync;
 
@@ -45,7 +53,7 @@ function insertAchievement(id: string, localDate: string, amount = 100): void {
 
 beforeEach(() => {
   database = new DatabaseSync(":memory:");
-  database.exec(readFileSync(migrationPath, "utf8"));
+  applyMigrations(database);
   insertSetup();
 });
 
@@ -123,6 +131,21 @@ describe("D1スキーマ", () => {
       database.exec(`
         INSERT INTO payments (id, idempotency_key, amount_yen, paid_at_utc)
         VALUES ('p2', 'same-idempotency-key', 100, '2026-09-24T03:00:00.000Z');
+      `)
+    ).toThrow();
+  });
+
+  it("同じ日へ通知送信記録を2件作れない", () => {
+    database.exec(`
+      INSERT INTO notification_deliveries
+        (local_date, claimed_at_utc, sent_count)
+      VALUES ('2026-09-23', '2026-09-23T11:00:00.000Z', 1);
+    `);
+    expect(() =>
+      database.exec(`
+        INSERT INTO notification_deliveries
+          (local_date, claimed_at_utc, sent_count)
+        VALUES ('2026-09-23', '2026-09-23T11:05:00.000Z', 1);
       `)
     ).toThrow();
   });

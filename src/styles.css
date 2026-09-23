@@ -174,6 +174,148 @@ textarea {
   gap: 1rem;
 }
 
+.character-card {
+  display: grid;
+  grid-template-columns: minmax(180px, 42%) 1fr;
+  align-items: center;
+  gap: clamp(1rem, 4vw, 2rem);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 17% 45%, rgb(255 199 126 / 32%), transparent 12rem),
+    var(--paper);
+}
+
+.character-visual {
+  position: relative;
+}
+
+.character-sprite {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  border-radius: 22px;
+  background-image: url("/character-evolution.webp");
+  background-repeat: no-repeat;
+  background-size: 500% 500%;
+}
+
+.character-sprite.muted {
+  filter: grayscale(1);
+  opacity: 0.24;
+}
+
+.character-sprite.decoration-aura {
+  filter: drop-shadow(0 0 15px rgb(255 186 104 / 85%));
+}
+
+.character-decoration {
+  position: absolute;
+  z-index: 1;
+  top: 2%;
+  right: 8%;
+  display: grid;
+  width: 2.4rem;
+  height: 2.4rem;
+  place-items: center;
+  border-radius: 50%;
+  background: rgb(255 253 248 / 90%);
+  color: #d8842f;
+  font-size: 1.45rem;
+  box-shadow: 0 8px 22px rgb(70 52 29 / 13%);
+}
+
+.decoration-crown .character-decoration {
+  color: #b87817;
+  font-size: 1.6rem;
+}
+
+.decoration-aura .character-decoration {
+  background: #fff1b8;
+  color: #d06b2d;
+}
+
+.character-copy h2,
+.collection-card h2 {
+  margin-bottom: 0.35rem;
+}
+
+.character-copy > p:not(.eyebrow, .decoration-copy) {
+  margin-bottom: 0.8rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.growth-progress {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eee5d8;
+}
+
+.growth-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--peach), #ef9f4c);
+}
+
+.growth-meta {
+  display: grid;
+  gap: 0.2rem;
+  margin-top: 0.55rem;
+}
+
+.growth-meta strong {
+  color: var(--green);
+  font-size: 0.82rem;
+}
+
+.growth-meta span,
+.decoration-copy {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.decoration-copy {
+  margin: 0.55rem 0 0;
+}
+
+.collection-card {
+  overflow: hidden;
+}
+
+.character-collection {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-top: 1.1rem;
+}
+
+.collection-entry {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  text-align: center;
+}
+
+.collection-entry .character-sprite {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background-color: var(--cream);
+}
+
+.collection-entry strong {
+  overflow: hidden;
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collection-entry span {
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
 .card,
 .hero-card,
 .parent-summary {
@@ -519,6 +661,31 @@ textarea {
   gap: 1rem;
 }
 
+.notification-device-card .quiet-note {
+  text-align: left;
+}
+
+.notification-parent-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.notification-parent-card > p:not(.eyebrow) {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.toggle-row input {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
 .goal-picker {
   display: grid;
   grid-template-columns: 56px 1fr 56px;
@@ -768,6 +935,24 @@ textarea {
 
   .hero-card {
     min-height: 390px;
+  }
+
+  .character-card {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+
+  .character-visual {
+    width: min(100%, 330px);
+    margin: -0.5rem auto 0;
+  }
+
+  .character-copy {
+    margin-top: -0.4rem;
+  }
+
+  .character-collection {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .self-report-card,

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
+import { CharacterCollection } from "../components/Character";
 import { StatusMessage } from "../components/StatusMessage";
 import { currentMonth, shortDate, yen } from "../format";
 import type { Achievement, CalendarData } from "../types";
@@ -118,6 +119,7 @@ export function CalendarScreen() {
           </div>
         </section>
       )}
+      {data && <CharacterCollection character={data.character} />}
       <p className="quiet-note">今週の獲得目安：{yen(data?.weeklyEarnedYen ?? 0)}</p>
     </div>
   );

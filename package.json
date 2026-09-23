@@ -6,14 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "generate:vapid": "node scripts/generate-vapid-keys.mjs",
     "preview": "vite preview",
     "pages:dev": "npm run build && wrangler pages dev dist --persist-to .wrangler/state",
+    "notifications:dev": "wrangler dev --config wrangler.notifications.toml --test-scheduled --persist-to .wrangler/state",
+    "notifications:deploy": "wrangler deploy --config wrangler.notifications.toml",
     "db:migrate": "wrangler d1 migrations apply study-habit --local --persist-to .wrangler/state",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
     "test": "vitest run"
   },
   "dependencies": {
+    "@block65/webcrypto-web-push": "2.0.0",
     "react": "19.1.1",
     "react-dom": "19.1.1"
   },

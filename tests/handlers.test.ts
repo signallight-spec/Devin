@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -8,10 +8,18 @@ import { errorResponse } from "../functions/lib/http";
 import type { Env } from "../functions/lib/types";
 import { addLocalDays, localDateInTokyo } from "../shared/domain";
 
-const migrationPath = resolve(
+const migrationsDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  "../migrations/0001_initial.sql"
+  "../migrations"
 );
+
+function applyMigrations(database: DatabaseSync): void {
+  for (const file of readdirSync(migrationsDirectory).sort()) {
+    if (file.endsWith(".sql")) {
+      database.exec(readFileSync(resolve(migrationsDirectory, file), "utf8"));
+    }
+  }
+}
 
 type SqlValue = string | number | bigint | Uint8Array | null;
 
@@ -60,7 +68,10 @@ class TestStatement {
     return {
       results: [],
       success: true,
-      meta: { last_row_id: Number(result.lastInsertRowid) }
+      meta: {
+        changes: result.changes,
+        last_row_id: Number(result.lastInsertRowid)
+      }
     } as unknown as D1Result<T>;
   }
 }
@@ -69,7 +80,7 @@ class TestD1 {
   readonly sqlite = new DatabaseSync(":memory:");
 
   constructor() {
-    this.sqlite.exec(readFileSync(migrationPath, "utf8"));
+    applyMigrations(this.sqlite);
   }
 
   prepare(query: string): D1PreparedStatement {
@@ -136,7 +147,8 @@ beforeEach(async () => {
   env = {
     DB: testD1 as unknown as D1Database,
     BOOTSTRAP_TOKEN: "bootstrap-token",
-    PARENT_SESSION_SECRET: "parent-session-secret"
+    PARENT_SESSION_SECRET: "parent-session-secret",
+    VAPID_PUBLIC_KEY: "public-key"
   };
   const response = await handleApi(
     request("/setup", {
@@ -157,6 +169,140 @@ afterEach(() => {
 });
 
 describe("APIハンドラー", () => {
+  async function parentToken(): Promise<string> {
+    const response = await handleApi(
+      request(
+        "/parent/session",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: "1234" })
+        },
+        familyKey
+      ),
+      env
+    );
+    return (await responseJson<{ token: string }>(response)).token;
+  }
+
+  it("今日の状態へ育成情報と通知設定を含める", async () => {
+    const response = await handleApi(request("/today", {}, familyKey), env);
+    const body = await responseJson<{
+      character: { stage: string; cycleProgressDays: number };
+      notification: {
+        enabled: boolean;
+        time: string;
+        available: boolean;
+        publicKey: string;
+      };
+    }>(response);
+
+    expect(body.character).toMatchObject({
+      stage: "egg",
+      cycleProgressDays: 0
+    });
+    expect(body.notification).toEqual({
+      enabled: true,
+      time: "20:00",
+      available: true,
+      publicKey: "public-key"
+    });
+  });
+
+  it("AndroidのPush購読を登録・解除する", async () => {
+    const input = {
+      endpoint: "https://fcm.googleapis.com/fcm/send/subscription-id",
+      p256dh: "client-public-key",
+      auth: "auth-secret"
+    };
+    const created = await handleApi(
+      request(
+        "/push/subscriptions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input)
+        },
+        familyKey
+      ),
+      env
+    );
+    const registered = testD1.sqlite
+      .prepare("SELECT endpoint FROM push_subscriptions")
+      .get() as { endpoint: string };
+    expect(created.status).toBe(204);
+    expect(registered.endpoint).toBe(input.endpoint);
+
+    const removed = await handleApi(
+      request(
+        "/push/subscriptions",
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: input.endpoint })
+        },
+        familyKey
+      ),
+      env
+    );
+    const count = testD1.sqlite
+      .prepare("SELECT COUNT(*) AS count FROM push_subscriptions")
+      .get() as { count: number };
+    expect(removed.status).toBe(204);
+    expect(count.count).toBe(0);
+
+    const rejected = await handleRequest(
+      request(
+        "/push/subscriptions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...input,
+            endpoint: "https://example.test/not-a-push-service"
+          })
+        },
+        familyKey
+      )
+    );
+    expect(rejected.status).toBe(400);
+  });
+
+  it("親が未達通知のON/OFFと時刻を変更する", async () => {
+    const token = await parentToken();
+    const response = await handleRequest(
+      request(
+        "/parent/notifications",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: true, time: "19:35" })
+        },
+        familyKey,
+        token
+      )
+    );
+    expect(response.status).toBe(200);
+    await expect(responseJson(response)).resolves.toEqual({
+      enabled: true,
+      time: "19:35"
+    });
+
+    const invalid = await handleRequest(
+      request(
+        "/parent/notifications",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: true, time: "19:37" })
+        },
+        familyKey,
+        token
+      )
+    );
+    expect(invalid.status).toBe(400);
+  });
+
   it("同日の再送では既存の達成を返す", async () => {
     const first = await handleApi(
       request(

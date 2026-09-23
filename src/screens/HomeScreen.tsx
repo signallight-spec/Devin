@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
+import { CharacterCard } from "../components/Character";
 import { StatusMessage } from "../components/StatusMessage";
 import { timerText, yen } from "../format";
 import { useTimer } from "../hooks/useTimer";
@@ -119,6 +120,7 @@ export function HomeScreen({ onInvalidKey }: { onInvalidKey: () => void }) {
   if (today.achievement) {
     return (
       <div className="stack">
+        <CharacterCard character={today.character} />
         <section className="hero-card completed-card">
           <div className="stamp" aria-hidden="true">できた</div>
           <p className="eyebrow">今日のスタンプ</p>
@@ -161,6 +163,7 @@ export function HomeScreen({ onInvalidKey }: { onInvalidKey: () => void }) {
 
   return (
     <div className="stack">
+      <CharacterCard character={today.character} />
       <section className="hero-card">
         <div className="streak-chip">連続 {today.currentStreakDays} 日</div>
         <p className="eyebrow">今日の目標</p>

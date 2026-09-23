@@ -1,2 +1,5 @@
 BOOTSTRAP_TOKEN=replace-with-a-long-random-bootstrap-token
 PARENT_SESSION_SECRET=replace-with-a-different-long-random-secret
+VAPID_PUBLIC_KEY=replace-with-generated-public-key
+VAPID_PRIVATE_KEY=replace-with-generated-private-key
+VAPID_SUBJECT=mailto:your-email@example.com

@@ -2,6 +2,7 @@ export interface Env {
   DB: D1Database;
   BOOTSTRAP_TOKEN: string;
   PARENT_SESSION_SECRET: string;
+  VAPID_PUBLIC_KEY?: string;
 }
 
 export interface AppSettingsRow {
@@ -12,6 +13,9 @@ export interface AppSettingsRow {
   pin_hash: string;
   pin_failed_attempts: number;
   pin_locked_until_utc: string | null;
+  character_seed: number;
+  notifications_enabled: number;
+  notification_time: string;
   created_at_utc: string;
   updated_at_utc: string;
 }

@@ -81,6 +81,10 @@ export function ParentScreen() {
   });
   const [newPin, setNewPin] = useState("");
   const [rotatedKey, setRotatedKey] = useState("");
+  const [notificationForm, setNotificationForm] = useState({
+    enabled: true,
+    time: "20:00"
+  });
 
   const load = useCallback(async (
     options: {
@@ -108,6 +112,7 @@ export function ParentScreen() {
         bonusIntervalDays: nextDashboard.currentAllowanceRule.bonusIntervalDays,
         bonusAmountYen: nextDashboard.currentAllowanceRule.bonusAmountYen
       });
+      setNotificationForm(nextDashboard.notificationSettings);
     } catch (error) {
       if (
         error instanceof Error &&
@@ -192,6 +197,30 @@ export function ParentScreen() {
         `${successMessage} ただし表示の同期に失敗したため、画面を再読み込みしてください。`
     });
     setBusy(false);
+  };
+
+  const saveNotificationSettings = async () => {
+    setBusy(true);
+    setMessage("");
+    try {
+      const settings = await api.updateNotificationSettings(notificationForm);
+      setDashboard((value) => value ? {
+        ...value,
+        notificationSettings: settings
+      } : value);
+      setNotificationForm(settings);
+      setTone("success");
+      setMessage(
+        settings.enabled
+          ? `未達通知を毎日${settings.time}に設定しました。`
+          : "未達通知をOFFにしました。"
+      );
+    } catch (error) {
+      setTone("error");
+      setMessage(error instanceof Error ? error.message : "通知設定に失敗しました。");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const rotateKey = async () => {
@@ -364,6 +393,48 @@ export function ParentScreen() {
             ))}
           </div>
         )}
+      </section>
+
+      <section className="card notification-parent-card">
+        <p className="eyebrow">娘のAndroid端末</p>
+        <h2>未達通知</h2>
+        <p>設定時刻の時点で今日の記録がなければ、登録済み端末へ1回通知します。</p>
+        <label className="toggle-row">
+          <input
+            checked={notificationForm.enabled}
+            onChange={(event) =>
+              setNotificationForm((value) => ({
+                ...value,
+                enabled: event.target.checked
+              }))
+            }
+            type="checkbox"
+          />
+          通知をONにする
+        </label>
+        <label>
+          通知時刻（5分刻み）
+          <input
+            disabled={!notificationForm.enabled}
+            onChange={(event) =>
+              setNotificationForm((value) => ({
+                ...value,
+                time: event.target.value
+              }))
+            }
+            step={300}
+            type="time"
+            value={notificationForm.time}
+          />
+        </label>
+        <button
+          className="secondary-button"
+          disabled={busy}
+          onClick={saveNotificationSettings}
+          type="button"
+        >
+          通知設定を保存
+        </button>
       </section>
 
       <section className="card parent-security">

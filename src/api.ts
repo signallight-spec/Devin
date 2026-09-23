@@ -130,6 +130,22 @@ export const api = {
       { method: "PATCH", body: JSON.stringify({ goalMinutes }) }
     );
   },
+  savePushSubscription(input: {
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+  }) {
+    return apiRequest<void>("/push/subscriptions", {
+      method: "POST",
+      body: JSON.stringify(input)
+    });
+  },
+  deletePushSubscription(endpoint: string) {
+    return apiRequest<void>("/push/subscriptions", {
+      method: "DELETE",
+      body: JSON.stringify({ endpoint })
+    });
+  },
   async startParentSession(pin: string) {
     const result = await apiRequest<{ token: string; expiresAt: string }>(
       "/parent/session",
@@ -163,6 +179,13 @@ export const api = {
     return apiRequest<AllowanceRule>(
       "/parent/allowance-rules",
       { method: "POST", body: JSON.stringify(input) },
+      { parent: true }
+    );
+  },
+  updateNotificationSettings(input: { enabled: boolean; time: string }) {
+    return apiRequest<{ enabled: boolean; time: string }>(
+      "/parent/notifications",
+      { method: "PATCH", body: JSON.stringify(input) },
       { parent: true }
     );
   },

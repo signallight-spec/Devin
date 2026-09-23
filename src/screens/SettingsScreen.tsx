@@ -1,16 +1,39 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { StatusMessage } from "../components/StatusMessage";
+import {
+  currentPushSubscription,
+  disablePushNotifications,
+  enablePushNotifications,
+  pushSupported,
+  syncPushSubscription
+} from "../push";
 
 export function SettingsScreen({ onFamilyKeyReset }: { onFamilyKeyReset: () => void }) {
   const [goalMinutes, setGoalMinutes] = useState(25);
+  const [notification, setNotification] = useState({
+    enabled: true,
+    time: "20:00",
+    available: false,
+    publicKey: null as string | null
+  });
+  const [subscribed, setSubscribed] = useState(false);
   const [message, setMessage] = useState("");
   const [tone, setTone] = useState<"error" | "success">("success");
   const [busy, setBusy] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
 
   useEffect(() => {
     api.today()
-      .then((today) => setGoalMinutes(today.goalMinutes))
+      .then(async (today) => {
+        setGoalMinutes(today.goalMinutes);
+        setNotification(today.notification);
+        const subscription = await currentPushSubscription();
+        setSubscribed(Boolean(subscription));
+        if (subscription) {
+          await syncPushSubscription(subscription);
+        }
+      })
       .catch((error: unknown) => {
         setTone("error");
         setMessage(error instanceof Error ? error.message : "読み込みに失敗しました。");
@@ -29,6 +52,32 @@ export function SettingsScreen({ onFamilyKeyReset }: { onFamilyKeyReset: () => v
       setMessage(error instanceof Error ? error.message : "保存に失敗しました。");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const togglePush = async () => {
+    setPushBusy(true);
+    setMessage("");
+    try {
+      if (subscribed) {
+        await disablePushNotifications();
+        setSubscribed(false);
+        setTone("success");
+        setMessage("この端末の通知を解除しました。");
+      } else {
+        if (!notification.publicKey) {
+          throw new Error("通知用の設定がまだ完了していません。");
+        }
+        await enablePushNotifications(notification.publicKey);
+        setSubscribed(true);
+        setTone("success");
+        setMessage("このAndroid端末で通知を受け取ります。");
+      }
+    } catch (error) {
+      setTone("error");
+      setMessage(error instanceof Error ? error.message : "通知設定に失敗しました。");
+    } finally {
+      setPushBusy(false);
     }
   };
 
@@ -61,6 +110,34 @@ export function SettingsScreen({ onFamilyKeyReset }: { onFamilyKeyReset: () => v
         <button className="primary-button" disabled={busy} onClick={save} type="button">
           {busy ? "保存中…" : "目標時間を保存"}
         </button>
+      </section>
+      <section className="card settings-card notification-device-card">
+        <p className="eyebrow">Android端末</p>
+        <h2>学習前の通知</h2>
+        <p>
+          {notification.enabled
+            ? `毎日${notification.time}の時点で未達なら、この端末へ1回だけ通知します。`
+            : "親ページで通知がOFFになっています。"}
+        </p>
+        {!pushSupported() ? (
+          <p className="quiet-note">このブラウザはWeb Pushに対応していません。</p>
+        ) : (
+          <button
+            className={subscribed ? "secondary-button" : "primary-button"}
+            disabled={pushBusy || !notification.available}
+            onClick={togglePush}
+            type="button"
+          >
+            {pushBusy
+              ? "設定中…"
+              : subscribed
+                ? "この端末の通知を解除"
+                : "この端末で通知を受け取る"}
+          </button>
+        )}
+        <p className="quiet-note">
+          Chromeからホーム画面へ追加し、Androidの通知許可をONにしてください。
+        </p>
       </section>
       <section className="card muted-card">
         <h2>この端末の家族キー</h2>

@@ -7,7 +7,11 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg", "apple-touch-icon-180x180.png"],
+      includeAssets: [
+        "favicon.svg",
+        "apple-touch-icon-180x180.png",
+        "character-evolution.webp"
+      ],
       manifest: {
         name: "まいにち学習スタンプ",
         short_name: "学習スタンプ",
@@ -36,6 +40,7 @@ export default defineConfig({
         ]
       },
       workbox: {
+        importScripts: ["push-sw.js"],
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {

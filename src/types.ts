@@ -6,6 +6,24 @@ export interface AllowanceRule {
   effectiveFrom: string;
 }
 
+export type CharacterSpecies = "dragon" | "fox" | "owl" | "rabbit" | "bear";
+export type CharacterStage = "egg" | "cracked" | "hatchling" | "juvenile" | "adult";
+export type StreakDecoration = "none" | "stars" | "crown" | "aura";
+
+export interface CharacterState {
+  species: CharacterSpecies;
+  stage: CharacterStage;
+  totalAchievementDays: number;
+  cycleProgressDays: number;
+  cycleGoalDays: number;
+  nextStageAt: number | null;
+  streakDecoration: StreakDecoration;
+  collection: Array<{
+    species: CharacterSpecies;
+    grownCount: number;
+  }>;
+}
+
 export interface Achievement {
   id: string;
   localDate: string;
@@ -27,6 +45,13 @@ export interface Today {
   currentStreakDays: number;
   achievement: Achievement | null;
   allowanceRule: AllowanceRule;
+  character: CharacterState;
+  notification: {
+    enabled: boolean;
+    time: string;
+    available: boolean;
+    publicKey: string | null;
+  };
 }
 
 export interface CalendarData {
@@ -36,6 +61,7 @@ export interface CalendarData {
   weeklyEarnedYen: number;
   unpaidBalanceYen: number;
   achievements: Achievement[];
+  character: CharacterState;
 }
 
 export interface ParentDashboard {
@@ -45,6 +71,10 @@ export interface ParentDashboard {
   oldestUnpaidDate: string | null;
   newestUnpaidDate: string | null;
   currentAllowanceRule: AllowanceRule;
+  notificationSettings: {
+    enabled: boolean;
+    time: string;
+  };
 }
 
 export interface Payment {

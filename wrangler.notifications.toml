@@ -1,0 +1,11 @@
+name = "study-habit-notifications"
+main = "notifications/worker.ts"
+compatibility_date = "2026-03-01"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "study-habit"
+database_id = "replace-with-your-d1-id"
