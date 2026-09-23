@@ -1,0 +1,9 @@
+name = "study-habit-app"
+pages_build_output_dir = "./dist"
+compatibility_date = "2026-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "study-habit"
+database_id = "replace-with-d1-database-id"
+migrations_dir = "migrations"

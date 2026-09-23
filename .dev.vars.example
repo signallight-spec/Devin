@@ -1,0 +1,2 @@
+BOOTSTRAP_TOKEN=replace-with-a-long-random-bootstrap-token
+PARENT_SESSION_SECRET=replace-with-a-different-long-random-secret
