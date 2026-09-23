@@ -3,7 +3,11 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { handleApi } from "../functions/lib/handlers";
+import {
+  handleApi,
+  handleConfirmFamilyKey
+} from "../functions/lib/handlers";
+import { getSettings } from "../functions/lib/data";
 import { errorResponse } from "../functions/lib/http";
 import type { Env } from "../functions/lib/types";
 import { addLocalDays, localDateInTokyo } from "../shared/domain";
@@ -301,6 +305,86 @@ describe("APIハンドラー", () => {
     expect(confirmed.status).toBe(204);
     expect((await handleRequest(request("/today", {}, familyKey))).status).toBe(401);
     expect((await handleApi(request("/today", {}, newFamilyKey), env)).status).toBe(200);
+  });
+
+  it("確認中にpending家族キーが変わった場合は別のキーを昇格しない", async () => {
+    const token = await parentToken();
+    const firstFamilyKey = "B".repeat(43);
+    const latestFamilyKey = "C".repeat(43);
+    await handleApi(
+      request(
+        "/parent/family-key/rotate",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ familyKey: firstFamilyKey })
+        },
+        familyKey,
+        token
+      ),
+      env
+    );
+    const staleSettings = await getSettings(env.DB);
+    expect(staleSettings).not.toBeNull();
+    await handleApi(
+      request(
+        "/parent/family-key/rotate",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ familyKey: latestFamilyKey })
+        },
+        familyKey,
+        token
+      ),
+      env
+    );
+    testD1.sqlite.exec(`
+      INSERT INTO push_subscriptions (
+        endpoint, p256dh, auth, created_at_utc, updated_at_utc
+      ) VALUES (
+        'https://fcm.googleapis.com/fcm/send/race', 'key', 'auth',
+        '2026-09-23T00:00:00.000Z', '2026-09-23T00:00:00.000Z'
+      )
+    `);
+
+    await expect(
+      handleConfirmFamilyKey(
+        request(
+          "/parent/family-key/confirm",
+          { method: "POST" },
+          firstFamilyKey,
+          token
+        ),
+        env,
+        staleSettings!,
+        new Date()
+      )
+    ).rejects.toMatchObject({
+      status: 409,
+      code: "PENDING_FAMILY_KEY_CHANGED"
+    });
+    const subscriptionCount = testD1.sqlite
+      .prepare("SELECT COUNT(*) AS count FROM push_subscriptions")
+      .get() as { count: number };
+    expect(subscriptionCount.count).toBe(1);
+
+    const confirmed = await handleApi(
+      request(
+        "/parent/family-key/confirm",
+        { method: "POST" },
+        latestFamilyKey,
+        token
+      ),
+      env
+    );
+    expect(confirmed.status).toBe(204);
+    expect(
+      (await handleRequest(request("/today", {}, firstFamilyKey))).status
+    ).toBe(401);
+    expect(
+      (await handleApi(request("/today", {}, latestFamilyKey), env)).status
+    ).toBe(200);
   });
 
   it("親が未達通知のON/OFFと時刻を変更する", async () => {

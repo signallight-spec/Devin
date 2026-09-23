@@ -118,18 +118,6 @@ async function requireFamilyKey(
   }
 }
 
-async function pendingFamilyKeyMatches(
-  request: Request,
-  settings: AppSettingsRow
-): Promise<boolean> {
-  const familyKey = request.headers.get("x-family-key");
-  return Boolean(
-    familyKey &&
-      settings.pending_family_key_hash &&
-      (await familyKeyMatches(familyKey, settings.pending_family_key_hash))
-  );
-}
-
 async function latestStreak(
   db: D1Database,
   today: string
@@ -985,7 +973,7 @@ async function handleRotateFamilyKey(
   return json({ familyKey });
 }
 
-async function handleConfirmFamilyKey(
+export async function handleConfirmFamilyKey(
   request: Request,
   env: Env,
   settings: AppSettingsRow,
@@ -994,27 +982,48 @@ async function handleConfirmFamilyKey(
   if (!settings.pending_family_key_hash) {
     return empty();
   }
-  if (!(await pendingFamilyKeyMatches(request, settings))) {
+  const familyKey = request.headers.get("x-family-key");
+  if (!familyKey) {
     throw new HttpError(
       409,
       "PENDING_FAMILY_KEY_REQUIRED",
       "新しい家族キーで確認してください。"
     );
   }
-  await env.DB.batch([
+  const pendingFamilyKeyHash = await sha256Hex(familyKey);
+  const [promotion] = await env.DB.batch([
     env.DB
       .prepare(
         `UPDATE app_settings
          SET
-           family_key_hash = pending_family_key_hash,
+           family_key_hash = ?,
            pending_family_key_hash = NULL,
            pending_family_key_created_at_utc = NULL,
            updated_at_utc = ?
-         WHERE id = 1`
+         WHERE id = 1
+           AND pending_family_key_hash = ?`
       )
-      .bind(now.toISOString()),
-    env.DB.prepare("DELETE FROM push_subscriptions")
+      .bind(pendingFamilyKeyHash, now.toISOString(), pendingFamilyKeyHash),
+    env.DB
+      .prepare(
+        `DELETE FROM push_subscriptions
+         WHERE EXISTS (
+           SELECT 1
+           FROM app_settings
+           WHERE id = 1
+             AND family_key_hash = ?
+             AND pending_family_key_hash IS NULL
+         )`
+      )
+      .bind(pendingFamilyKeyHash)
   ]);
+  if (promotion.meta.changes !== 1) {
+    throw new HttpError(
+      409,
+      "PENDING_FAMILY_KEY_CHANGED",
+      "別の家族キーが再発行されました。最新のキーで確認してください。"
+    );
+  }
   return empty();
 }
 
