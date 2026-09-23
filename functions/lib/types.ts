@@ -15,6 +15,7 @@ export interface AppSettingsRow {
   pin_hash: string;
   pin_failed_attempts: number;
   pin_locked_until_utc: string | null;
+  parent_session_version: number;
   character_seed: number;
   notifications_enabled: number;
   notification_time: string;

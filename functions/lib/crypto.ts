@@ -126,11 +126,17 @@ async function hmac(value: string, secret: string): Promise<string> {
 
 export async function createParentSession(
   secret: string,
+  sessionVersion: number,
   now: Date
 ): Promise<{ token: string; expiresAt: string }> {
   const expiresAt = new Date(now.getTime() + 15 * 60 * 1000);
   const payload = base64Url(
-    encoder.encode(JSON.stringify({ exp: Math.floor(expiresAt.getTime() / 1000) }))
+    encoder.encode(
+      JSON.stringify({
+        exp: Math.floor(expiresAt.getTime() / 1000),
+        sv: sessionVersion
+      })
+    )
   );
   return {
     token: `${payload}.${await hmac(payload, secret)}`,
@@ -141,6 +147,7 @@ export async function createParentSession(
 export async function requireValidParentSession(
   request: Request,
   secret: string,
+  sessionVersion: number,
   now: Date
 ): Promise<void> {
   const authorization = request.headers.get("authorization");
@@ -162,10 +169,12 @@ export async function requireValidParentSession(
   try {
     const decoded = JSON.parse(new TextDecoder().decode(fromBase64Url(payload))) as {
       exp?: unknown;
+      sv?: unknown;
     };
     if (
       typeof decoded.exp !== "number" ||
-      decoded.exp <= Math.floor(now.getTime() / 1000)
+      decoded.exp <= Math.floor(now.getTime() / 1000) ||
+      decoded.sv !== sessionVersion
     ) {
       throw new Error("expired");
     }

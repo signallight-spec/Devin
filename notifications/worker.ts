@@ -22,6 +22,8 @@ interface SubscriptionRow {
   auth: string;
 }
 
+const CLAIM_STALE_MINUTES = 15;
+
 async function sendNotification(
   subscription: SubscriptionRow,
   env: NotificationEnv
@@ -54,6 +56,63 @@ async function sendNotification(
     }
   );
   return fetch(subscription.endpoint, payload);
+}
+
+async function claimSubscription(
+  env: NotificationEnv,
+  localDate: string,
+  endpoint: string,
+  now: Date
+): Promise<boolean> {
+  const nowIso = now.toISOString();
+  const staleBeforeIso = new Date(
+    now.getTime() - CLAIM_STALE_MINUTES * 60 * 1000
+  ).toISOString();
+  const inserted = await env.DB
+    .prepare(
+      `INSERT OR IGNORE INTO notification_delivery_subscriptions
+        (local_date, endpoint, sent_at_utc, status)
+       VALUES (?, ?, ?, 'pending')`
+    )
+    .bind(localDate, endpoint, nowIso)
+    .run();
+  if (inserted.meta.changes) {
+    return true;
+  }
+  const reclaimed = await env.DB
+    .prepare(
+      `UPDATE notification_delivery_subscriptions
+       SET status = 'pending', sent_at_utc = ?
+       WHERE local_date = ?
+        AND endpoint = ?
+        AND status != 'sent'
+        AND (
+          status = 'failed'
+          OR sent_at_utc <= ?
+        )`
+    )
+    .bind(nowIso, localDate, endpoint, staleBeforeIso)
+    .run();
+  return Boolean(reclaimed.meta.changes);
+}
+
+async function markSubscriptionResult(
+  env: NotificationEnv,
+  localDate: string,
+  endpoint: string,
+  status: "sent" | "failed",
+  now: Date
+): Promise<void> {
+  await env.DB
+    .prepare(
+      `UPDATE notification_delivery_subscriptions
+       SET status = ?, sent_at_utc = ?
+       WHERE local_date = ?
+        AND endpoint = ?
+        AND status = 'pending'`
+    )
+    .bind(status, now.toISOString(), localDate, endpoint)
+    .run();
 }
 
 export async function processReminder(
@@ -94,15 +153,7 @@ export async function processReminder(
     .bind(timing.localDate, now.toISOString())
     .run();
   const subscriptions = await env.DB
-    .prepare(
-      `SELECT ps.endpoint, ps.p256dh, ps.auth
-       FROM push_subscriptions ps
-       LEFT JOIN notification_delivery_subscriptions nds
-         ON nds.local_date = ?
-        AND nds.endpoint = ps.endpoint
-       WHERE nds.endpoint IS NULL`
-    )
-    .bind(timing.localDate)
+    .prepare("SELECT endpoint, p256dh, auth FROM push_subscriptions")
     .all<SubscriptionRow>();
   if (subscriptions.results.length === 0) {
     return 0;
@@ -111,6 +162,15 @@ export async function processReminder(
   let sentCount = 0;
   await Promise.all(
     subscriptions.results.map(async (subscription) => {
+      const claimed = await claimSubscription(
+        env,
+        timing.localDate,
+        subscription.endpoint,
+        now
+      );
+      if (!claimed) {
+        return;
+      }
       try {
         const response = await sendNotification(subscription, env);
         if (response.ok) {
@@ -118,11 +178,13 @@ export async function processReminder(
           await env.DB.batch([
             env.DB
               .prepare(
-                `INSERT OR IGNORE INTO notification_delivery_subscriptions
-                  (local_date, endpoint, sent_at_utc)
-                 VALUES (?, ?, ?)`
+                `UPDATE notification_delivery_subscriptions
+                 SET status = 'sent', sent_at_utc = ?
+                 WHERE local_date = ?
+                  AND endpoint = ?
+                  AND status = 'pending'`
               )
-              .bind(timing.localDate, subscription.endpoint, now.toISOString()),
+              .bind(now.toISOString(), timing.localDate, subscription.endpoint),
             env.DB
               .prepare(
                 `UPDATE push_subscriptions
@@ -138,8 +200,23 @@ export async function processReminder(
             .prepare("DELETE FROM push_subscriptions WHERE endpoint = ?")
             .bind(subscription.endpoint)
             .run();
+          return;
         }
+        await markSubscriptionResult(
+          env,
+          timing.localDate,
+          subscription.endpoint,
+          "failed",
+          now
+        );
       } catch {
+        await markSubscriptionResult(
+          env,
+          timing.localDate,
+          subscription.endpoint,
+          "failed",
+          now
+        );
         return;
       }
     })
@@ -151,6 +228,7 @@ export async function processReminder(
          SELECT COUNT(*)
          FROM notification_delivery_subscriptions
          WHERE local_date = ?
+          AND status = 'sent'
        )
        WHERE local_date = ?`
     )

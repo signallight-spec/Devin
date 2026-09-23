@@ -73,6 +73,6 @@ export async function disablePushNotifications(): Promise<void> {
   if (!subscription) {
     return;
   }
-  await api.deletePushSubscription(subscription.endpoint);
   await subscription.unsubscribe();
+  await api.deletePushSubscription(subscription.endpoint);
 }

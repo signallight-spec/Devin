@@ -655,4 +655,40 @@ describe("APIハンドラー", () => {
       pin_locked_until_utc: null
     });
   });
+
+  it("PIN変更後は既存の親セッションを無効化する", async () => {
+    const oldToken = await parentToken();
+    const updated = await handleApi(
+      request(
+        "/parent/pin",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ newPin: "5678" })
+        },
+        familyKey,
+        oldToken
+      ),
+      env
+    );
+    expect(updated.status).toBe(204);
+
+    const oldSession = await handleRequest(
+      request("/parent/dashboard", {}, familyKey, oldToken)
+    );
+    expect(oldSession.status).toBe(403);
+
+    const newSession = await handleRequest(
+      request(
+        "/parent/session",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: "5678" })
+        },
+        familyKey
+      )
+    );
+    expect(newSession.status).toBe(200);
+  });
 });

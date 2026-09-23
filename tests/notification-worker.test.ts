@@ -188,6 +188,47 @@ describe("未達通知Worker", () => {
     ]);
   });
 
+  it("同時起動しても購読ごとのclaimを取れた1回だけ送る", async () => {
+    let resolveFetch!: (value: Response) => void;
+    const fetchResponse = new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    });
+    const fetchMock = vi.fn(() => fetchResponse);
+    vi.stubGlobal("fetch", fetchMock);
+    const now = new Date("2026-09-23T11:05:00.000Z");
+
+    const first = processReminder(env, now);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const second = processReminder(env, now);
+
+    await expect(second).resolves.toBe(0);
+    resolveFetch(new Response(null, { status: 201 }));
+    await expect(first).resolves.toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("処理中claimが古くなったら再試行できる", async () => {
+    database.sqlite.exec(`
+      INSERT INTO notification_deliveries
+        (local_date, claimed_at_utc, sent_count)
+      VALUES ('2026-09-23', '2026-09-23T11:00:00.000Z', 0);
+      INSERT INTO notification_delivery_subscriptions
+        (local_date, endpoint, sent_at_utc, status)
+      VALUES (
+        '2026-09-23',
+        'https://fcm.googleapis.com/fcm/send/test',
+        '2026-09-23T11:00:00.000Z',
+        'pending'
+      );
+    `);
+
+    await expect(
+      processReminder(env, new Date("2026-09-23T11:20:00.000Z"))
+    ).resolves.toBe(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("当日の達成があれば通知しない", async () => {
     database.sqlite.exec(`
       INSERT INTO allowance_rules (

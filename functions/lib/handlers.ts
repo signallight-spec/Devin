@@ -56,6 +56,13 @@ interface LatestStreakRow {
   streak_days: number;
 }
 
+interface PinAttemptRow {
+  pin_hash: string;
+  pin_failed_attempts: number;
+  pin_locked_until_utc: string | null;
+  parent_session_version: number;
+}
+
 const MAX_PIN_ATTEMPTS = 5;
 const PIN_LOCK_MINUTES = 5;
 const FAMILY_KEY_PATTERN = /^[A-Za-z0-9_-]{43}$/;
@@ -531,7 +538,6 @@ async function handleGoalUpdate(
 async function handleParentSession(
   request: Request,
   env: Env,
-  settings: AppSettingsRow,
   now: Date
 ): Promise<Response> {
   if (!env.PARENT_SESSION_SECRET) {
@@ -541,50 +547,52 @@ async function handleParentSession(
   rejectUnknownKeys(body, ["pin"]);
   const pin = requiredString(body, "pin", /^\d{4}$/);
   const nowIso = now.toISOString();
-  const activeLock =
-    settings.pin_locked_until_utc &&
-    Date.parse(settings.pin_locked_until_utc) > now.getTime();
-  if (activeLock) {
+  const lockedUntil = new Date(
+    now.getTime() + PIN_LOCK_MINUTES * 60 * 1000
+  ).toISOString();
+  const attempt = await env.DB
+    .prepare(
+      `UPDATE app_settings
+       SET
+         pin_failed_attempts = CASE
+           WHEN pin_locked_until_utc IS NOT NULL
+            AND pin_locked_until_utc <= ?
+           THEN 1
+           ELSE pin_failed_attempts + 1
+         END,
+         pin_locked_until_utc = CASE
+           WHEN (
+             CASE
+               WHEN pin_locked_until_utc IS NOT NULL
+                AND pin_locked_until_utc <= ?
+               THEN 1
+               ELSE pin_failed_attempts + 1
+             END
+           ) >= ? THEN ?
+           ELSE NULL
+         END,
+         updated_at_utc = ?
+       WHERE id = 1
+        AND (
+          pin_locked_until_utc IS NULL
+          OR pin_locked_until_utc <= ?
+        )
+       RETURNING pin_hash, pin_failed_attempts, pin_locked_until_utc,
+         parent_session_version`
+    )
+    .bind(nowIso, nowIso, MAX_PIN_ATTEMPTS, lockedUntil, nowIso, nowIso)
+    .first<PinAttemptRow>();
+  if (!attempt) {
     throw new HttpError(
       429,
       "PIN_LOCKED",
       `${PIN_LOCK_MINUTES}分後にもう一度試してください。`
     );
   }
-  if (!(await verifyPin(pin, settings.pin_hash))) {
-    const lockedUntil = new Date(
-      now.getTime() + PIN_LOCK_MINUTES * 60 * 1000
-    ).toISOString();
-    await env.DB
-      .prepare(
-        `UPDATE app_settings
-         SET
-           pin_failed_attempts = CASE
-             WHEN pin_locked_until_utc IS NOT NULL
-              AND pin_locked_until_utc <= ?
-             THEN 1
-             ELSE pin_failed_attempts + 1
-           END,
-           pin_locked_until_utc = CASE
-             WHEN (
-               CASE
-                 WHEN pin_locked_until_utc IS NOT NULL
-                  AND pin_locked_until_utc <= ?
-                 THEN 1
-                 ELSE pin_failed_attempts + 1
-               END
-             ) >= ? THEN ?
-             ELSE NULL
-           END,
-           updated_at_utc = ?
-         WHERE id = 1`
-      )
-      .bind(nowIso, nowIso, MAX_PIN_ATTEMPTS, lockedUntil, nowIso)
-      .run();
-    const updated = await getSettings(env.DB);
+  if (!(await verifyPin(pin, attempt.pin_hash))) {
     if (
-      updated?.pin_locked_until_utc &&
-      Date.parse(updated.pin_locked_until_utc) > now.getTime()
+      attempt.pin_locked_until_utc &&
+      Date.parse(attempt.pin_locked_until_utc) > now.getTime()
     ) {
       throw new HttpError(
         429,
@@ -594,20 +602,22 @@ async function handleParentSession(
     }
     throw new HttpError(403, "INVALID_PIN", "PINが正しくありません。");
   }
-  if (settings.pin_failed_attempts > 0 || settings.pin_locked_until_utc) {
-    await env.DB
-      .prepare(
-        `UPDATE app_settings
-         SET
-           pin_failed_attempts = 0,
-           pin_locked_until_utc = NULL,
-           updated_at_utc = ?
-         WHERE id = 1`
-      )
-      .bind(now.toISOString())
-      .run();
-  }
-  return json(await createParentSession(env.PARENT_SESSION_SECRET, now));
+  await env.DB
+    .prepare(
+      `UPDATE app_settings
+       SET
+         pin_failed_attempts = 0,
+         pin_locked_until_utc = NULL,
+         updated_at_utc = ?
+       WHERE id = 1`
+    )
+    .bind(nowIso)
+    .run();
+  return json(await createParentSession(
+    env.PARENT_SESSION_SECRET,
+    attempt.parent_session_version,
+    now
+  ));
 }
 
 async function handleParentDashboard(env: Env, now: Date): Promise<Response> {
@@ -1024,6 +1034,7 @@ async function handlePinUpdate(
          pin_hash = ?,
          pin_failed_attempts = 0,
          pin_locked_until_utc = NULL,
+         parent_session_version = parent_session_version + 1,
          updated_at_utc = ?
        WHERE id = 1`
     )
@@ -1055,6 +1066,7 @@ export async function handleApi(request: Request, env: Env): Promise<Response> {
     await requireValidParentSession(
       request,
       env.PARENT_SESSION_SECRET,
+      settings.parent_session_version,
       now
     );
   }
@@ -1078,7 +1090,7 @@ export async function handleApi(request: Request, env: Env): Promise<Response> {
     return handlePushSubscriptionDelete(request, env);
   }
   if (path === "/parent/session" && method === "POST") {
-    return handleParentSession(request, env, settings, now);
+    return handleParentSession(request, env, now);
   }
   if (path === "/parent/dashboard" && method === "GET") {
     return handleParentDashboard(env, now);
