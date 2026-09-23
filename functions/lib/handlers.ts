@@ -991,7 +991,18 @@ export async function handleConfirmFamilyKey(
     );
   }
   const pendingFamilyKeyHash = await sha256Hex(familyKey);
-  const [promotion] = await env.DB.batch([
+  const [, promotion] = await env.DB.batch([
+    env.DB
+      .prepare(
+        `DELETE FROM push_subscriptions
+         WHERE EXISTS (
+           SELECT 1
+           FROM app_settings
+           WHERE id = 1
+             AND pending_family_key_hash = ?
+         )`
+      )
+      .bind(pendingFamilyKeyHash),
     env.DB
       .prepare(
         `UPDATE app_settings
@@ -1003,19 +1014,7 @@ export async function handleConfirmFamilyKey(
          WHERE id = 1
            AND pending_family_key_hash = ?`
       )
-      .bind(pendingFamilyKeyHash, now.toISOString(), pendingFamilyKeyHash),
-    env.DB
-      .prepare(
-        `DELETE FROM push_subscriptions
-         WHERE EXISTS (
-           SELECT 1
-           FROM app_settings
-           WHERE id = 1
-             AND family_key_hash = ?
-             AND pending_family_key_hash IS NULL
-         )`
-      )
-      .bind(pendingFamilyKeyHash)
+      .bind(pendingFamilyKeyHash, now.toISOString(), pendingFamilyKeyHash)
   ]);
   if (promotion.meta.changes !== 1) {
     throw new HttpError(

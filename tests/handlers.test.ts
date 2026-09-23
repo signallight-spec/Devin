@@ -387,6 +387,65 @@ describe("APIハンドラー", () => {
     ).toBe(200);
   });
 
+  it("重複した家族キー確認は新しく登録された通知先を削除しない", async () => {
+    const token = await parentToken();
+    const newFamilyKey = "B".repeat(43);
+    await handleApi(
+      request(
+        "/parent/family-key/rotate",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ familyKey: newFamilyKey })
+        },
+        familyKey,
+        token
+      ),
+      env
+    );
+    const staleSettings = await getSettings(env.DB);
+    expect(staleSettings).not.toBeNull();
+    const firstConfirmed = await handleApi(
+      request(
+        "/parent/family-key/confirm",
+        { method: "POST" },
+        newFamilyKey,
+        token
+      ),
+      env
+    );
+    expect(firstConfirmed.status).toBe(204);
+    testD1.sqlite.exec(`
+      INSERT INTO push_subscriptions (
+        endpoint, p256dh, auth, created_at_utc, updated_at_utc
+      ) VALUES (
+        'https://fcm.googleapis.com/fcm/send/after-confirm', 'key', 'auth',
+        '2026-09-23T00:00:00.000Z', '2026-09-23T00:00:00.000Z'
+      )
+    `);
+
+    await expect(
+      handleConfirmFamilyKey(
+        request(
+          "/parent/family-key/confirm",
+          { method: "POST" },
+          newFamilyKey,
+          token
+        ),
+        env,
+        staleSettings!,
+        new Date()
+      )
+    ).rejects.toMatchObject({
+      status: 409,
+      code: "PENDING_FAMILY_KEY_CHANGED"
+    });
+    const subscriptionCount = testD1.sqlite
+      .prepare("SELECT COUNT(*) AS count FROM push_subscriptions")
+      .get() as { count: number };
+    expect(subscriptionCount.count).toBe(1);
+  });
+
   it("親が未達通知のON/OFFと時刻を変更する", async () => {
     const token = await parentToken();
     const response = await handleRequest(
