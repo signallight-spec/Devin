@@ -82,8 +82,13 @@ export function ParentScreen() {
   const [newPin, setNewPin] = useState("");
   const [rotatedKey, setRotatedKey] = useState("");
 
-  const load = useCallback(async (preserveMessage = false) => {
-    if (!preserveMessage) {
+  const load = useCallback(async (
+    options: {
+      preserveMessage?: boolean;
+      refreshFailureMessage?: string;
+    } = {}
+  ) => {
+    if (!options.preserveMessage) {
       setMessage("");
     }
     try {
@@ -111,8 +116,11 @@ export function ParentScreen() {
         clearParentToken();
         setAuthenticated(false);
       } else {
-        setTone("error");
-        setMessage(error instanceof Error ? error.message : "読み込みに失敗しました。");
+        setTone(options.refreshFailureMessage ? "info" : "error");
+        setMessage(
+          options.refreshFailureMessage ??
+          (error instanceof Error ? error.message : "読み込みに失敗しました。")
+        );
       }
     }
   }, []);
@@ -126,33 +134,64 @@ export function ParentScreen() {
   const settle = async () => {
     setBusy(true);
     setMessage("");
+    let payment: Payment;
     try {
-      const payment = await api.settle();
-      setTone("success");
-      setMessage(`${yen(payment.amountYen)}を支払い済みにしました。`);
-      await load(true);
+      payment = await api.settle();
     } catch (error) {
       setTone("error");
       setMessage(error instanceof Error ? error.message : "精算に失敗しました。");
-    } finally {
       setBusy(false);
+      return;
     }
+    const successMessage = `${yen(payment.amountYen)}を支払い済みにしました。`;
+    setDashboard((value) => value ? {
+      ...value,
+      unpaidBalanceYen: 0,
+      unpaidAchievementCount: 0
+    } : value);
+    setAchievements((items) => items.map((item) => ({ ...item, paid: true })));
+    setPayments((items) =>
+      items.some((item) => item.id === payment.id) ? items : [payment, ...items]
+    );
+    setTone("success");
+    setMessage(successMessage);
+    await load({
+      preserveMessage: true,
+      refreshFailureMessage:
+        `${successMessage} ただし表示の同期に失敗したため、画面を再読み込みしてください。`
+    });
+    setBusy(false);
   };
 
   const saveRule = async () => {
     setBusy(true);
     setMessage("");
+    let rule: AllowanceRule;
     try {
-      await api.createRule(ruleForm);
-      setTone("success");
-      setMessage("新しい小遣いルールを保存しました。過去分は変わりません。");
-      await load(true);
+      rule = await api.createRule(ruleForm);
     } catch (error) {
       setTone("error");
       setMessage(error instanceof Error ? error.message : "保存に失敗しました。");
-    } finally {
       setBusy(false);
+      return;
     }
+    const successMessage =
+      "新しい小遣いルールを保存しました。過去分は変わりません。";
+    setDashboard((value) => value ? {
+      ...value,
+      currentAllowanceRule: rule
+    } : value);
+    setRules((items) =>
+      items.some((item) => item.id === rule.id) ? items : [rule, ...items]
+    );
+    setTone("success");
+    setMessage(successMessage);
+    await load({
+      preserveMessage: true,
+      refreshFailureMessage:
+        `${successMessage} ただし表示の同期に失敗したため、画面を再読み込みしてください。`
+    });
+    setBusy(false);
   };
 
   const rotateKey = async () => {
