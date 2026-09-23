@@ -10,15 +10,35 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
   const [generatedKey, setGeneratedKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [copyMessage, setCopyMessage] = useState("");
 
-  const saveExistingKey = () => {
+  const saveExistingKey = async () => {
     const value = familyKeyInput.trim();
     if (!value) {
       setMessage("家族キーを入力してください。");
       return;
     }
-    setFamilyKey(value);
-    onReady();
+    setBusy(true);
+    setMessage("");
+    try {
+      await api.validateFamilyKey(value);
+      setFamilyKey(value);
+      onReady();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "家族キーを確認できませんでした。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyGeneratedKey = async () => {
+    setCopyMessage("");
+    try {
+      await navigator.clipboard.writeText(generatedKey);
+      setCopyMessage("コピーしました。");
+    } catch {
+      setCopyMessage("コピーできませんでした。キー欄を選択してコピーしてください。");
+    }
   };
 
   const setup = async () => {
@@ -53,15 +73,26 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
             親の端末を設定するときに使います。この画面を閉じると再表示できません。
           </p>
           <div className="one-time-key">
-            <code>{generatedKey}</code>
+            <input
+              aria-label="家族キー"
+              className="family-key-output"
+              onFocus={(event) => event.currentTarget.select()}
+              readOnly
+              spellCheck={false}
+              value={generatedKey}
+            />
             <button
               className="text-button"
-              onClick={() => void navigator.clipboard.writeText(generatedKey)}
+              onClick={() => void copyGeneratedKey()}
               type="button"
             >
-              コピー
+              {copyMessage === "コピーしました。" ? "コピー済み" : "コピー"}
             </button>
           </div>
+          <StatusMessage
+            message={copyMessage}
+            tone={copyMessage === "コピーしました。" ? "success" : "error"}
+          />
           <button className="primary-button" onClick={onReady} type="button">
             保存したので始める
           </button>
@@ -88,8 +119,13 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
             value={familyKeyInput}
           />
         </label>
-        <button className="primary-button" onClick={saveExistingKey} type="button">
-          この端末で使う
+        <button
+          className="primary-button"
+          disabled={busy}
+          onClick={() => void saveExistingKey()}
+          type="button"
+        >
+          {busy ? "確認中…" : "この端末で使う"}
         </button>
         <StatusMessage message={message} />
         <button

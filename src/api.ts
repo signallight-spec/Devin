@@ -108,6 +108,9 @@ export const api = {
   today() {
     return apiRequest<Today>("/today");
   },
+  validateFamilyKey(familyKey: string) {
+    return apiRequest<Today>("/today", {}, { familyKey });
+  },
   createAchievement(input: {
     method: "timer" | "self_report";
     subject: string | null;

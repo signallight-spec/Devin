@@ -733,9 +733,10 @@ textarea {
   padding: 1rem;
 }
 
-.one-time-key code {
-  overflow-wrap: anywhere;
+.family-key-output {
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
   font-size: 0.8rem;
+  letter-spacing: 0.02em;
 }
 
 .pin-change {
