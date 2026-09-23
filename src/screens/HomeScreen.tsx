@@ -193,7 +193,8 @@ export function HomeScreen({ onInvalidKey }: { onInvalidKey: () => void }) {
         </button>
       </section>
       <p className="quiet-note">
-        7日、14日、21日…の達成日に {yen(today.allowanceRule.bonusAmountYen)} の連続ボーナス。
+        {today.allowanceRule.bonusIntervalDays}日ごとの達成日に{" "}
+        {yen(today.allowanceRule.bonusAmountYen)} の連続ボーナス。
       </p>
     </div>
   );

@@ -55,6 +55,9 @@ interface LatestStreakRow {
   streak_days: number;
 }
 
+const MAX_PIN_ATTEMPTS = 5;
+const PIN_LOCK_MINUTES = 5;
+
 function normalizedPath(url: URL): string {
   const withoutPrefix = url.pathname.replace(/^\/api/, "");
   if (withoutPrefix.length > 1 && withoutPrefix.endsWith("/")) {
@@ -396,8 +399,59 @@ async function handleParentSession(
   const body = await readJsonObject(request);
   rejectUnknownKeys(body, ["pin"]);
   const pin = requiredString(body, "pin", /^\d{4}$/);
+  if (
+    settings.pin_locked_until_utc &&
+    Date.parse(settings.pin_locked_until_utc) > now.getTime()
+  ) {
+    throw new HttpError(
+      429,
+      "PIN_LOCKED",
+      `${PIN_LOCK_MINUTES}分後にもう一度試してください。`
+    );
+  }
   if (!(await verifyPin(pin, settings.pin_hash))) {
+    const lockedUntil = new Date(
+      now.getTime() + PIN_LOCK_MINUTES * 60 * 1000
+    ).toISOString();
+    await env.DB
+      .prepare(
+        `UPDATE app_settings
+         SET
+           pin_failed_attempts = pin_failed_attempts + 1,
+           pin_locked_until_utc = CASE
+             WHEN pin_failed_attempts + 1 >= ? THEN ?
+             ELSE NULL
+           END,
+           updated_at_utc = ?
+         WHERE id = 1`
+      )
+      .bind(MAX_PIN_ATTEMPTS, lockedUntil, now.toISOString())
+      .run();
+    const updated = await getSettings(env.DB);
+    if (
+      updated?.pin_locked_until_utc &&
+      Date.parse(updated.pin_locked_until_utc) > now.getTime()
+    ) {
+      throw new HttpError(
+        429,
+        "PIN_LOCKED",
+        `${PIN_LOCK_MINUTES}分後にもう一度試してください。`
+      );
+    }
     throw new HttpError(403, "INVALID_PIN", "PINが正しくありません。");
+  }
+  if (settings.pin_failed_attempts > 0 || settings.pin_locked_until_utc) {
+    await env.DB
+      .prepare(
+        `UPDATE app_settings
+         SET
+           pin_failed_attempts = 0,
+           pin_locked_until_utc = NULL,
+           updated_at_utc = ?
+         WHERE id = 1`
+      )
+      .bind(now.toISOString())
+      .run();
   }
   return json(await createParentSession(env.PARENT_SESSION_SECRET, now));
 }
@@ -609,8 +663,16 @@ async function handleSettle(
         )
         .bind(paymentId, paymentId, paymentId, paymentId),
       env.DB
-        .prepare("DELETE FROM payments WHERE id = ? AND amount_yen = 0")
-        .bind(paymentId)
+        .prepare(
+          `DELETE FROM payments
+           WHERE id = ?
+             AND NOT EXISTS (
+               SELECT 1
+               FROM payment_achievements
+               WHERE payment_id = ?
+             )`
+        )
+        .bind(paymentId, paymentId)
     ]);
   } catch {
     const concurrent = await paymentByIdempotency(env, idempotencyKey);
@@ -725,7 +787,11 @@ async function handlePinUpdate(
   await env.DB
     .prepare(
       `UPDATE app_settings
-       SET pin_hash = ?, updated_at_utc = ?
+       SET
+         pin_hash = ?,
+         pin_failed_attempts = 0,
+         pin_locked_until_utc = NULL,
+         updated_at_utc = ?
        WHERE id = 1`
     )
     .bind(pinHash, now.toISOString())

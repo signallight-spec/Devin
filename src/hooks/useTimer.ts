@@ -34,12 +34,6 @@ export function useTimer(goalMinutes: number) {
   );
   const completed = endsAt !== null && remainingSeconds === 0;
 
-  useEffect(() => {
-    if (completed) {
-      localStorage.removeItem(TIMER_END_STORAGE);
-    }
-  }, [completed]);
-
   const start = useCallback(() => {
     const nextEndsAt = Date.now() + goalMinutes * 60 * 1000;
     localStorage.setItem(TIMER_END_STORAGE, String(nextEndsAt));

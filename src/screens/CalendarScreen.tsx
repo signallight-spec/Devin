@@ -40,6 +40,8 @@ export function CalendarScreen() {
       })
       .catch((error: unknown) => {
         if (active) {
+          setData(null);
+          setSelected(null);
           setMessage(error instanceof Error ? error.message : "読み込みに失敗しました。");
         }
       });

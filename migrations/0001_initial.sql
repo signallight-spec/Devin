@@ -12,6 +12,9 @@ CREATE TABLE app_settings (
   family_key_hash TEXT NOT NULL
     CHECK (length(family_key_hash) = 64),
   pin_hash TEXT NOT NULL,
+  pin_failed_attempts INTEGER NOT NULL DEFAULT 0
+    CHECK (pin_failed_attempts >= 0),
+  pin_locked_until_utc TEXT,
   created_at_utc TEXT NOT NULL,
   updated_at_utc TEXT NOT NULL
 );

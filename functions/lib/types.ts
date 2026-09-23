@@ -10,6 +10,8 @@ export interface AppSettingsRow {
   goal_minutes: number;
   family_key_hash: string;
   pin_hash: string;
+  pin_failed_attempts: number;
+  pin_locked_until_utc: string | null;
   created_at_utc: string;
   updated_at_utc: string;
 }

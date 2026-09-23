@@ -57,13 +57,40 @@ export function errorResponse(error: unknown): Response {
 }
 
 export async function readJsonObject(request: Request): Promise<Record<string, unknown>> {
+  const maxBytes = 4096;
   const contentLength = Number(request.headers.get("content-length") ?? "0");
-  if (contentLength > 4096) {
+  if (contentLength > maxBytes) {
     throw new HttpError(413, "REQUEST_TOO_LARGE", "入力が大きすぎます。");
+  }
+  if (!request.body) {
+    throw new HttpError(400, "INVALID_JSON", "JSONの形式が正しくありません。");
+  }
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    byteLength += value.byteLength;
+    if (byteLength > maxBytes) {
+      await reader.cancel();
+      throw new HttpError(413, "REQUEST_TOO_LARGE", "入力が大きすぎます。");
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
   }
   let value: unknown;
   try {
-    value = await request.json();
+    value = JSON.parse(
+      new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes)
+    );
   } catch {
     throw new HttpError(400, "INVALID_JSON", "JSONの形式が正しくありません。");
   }

@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { handleApi } from "../functions/lib/handlers";
+import { errorResponse } from "../functions/lib/http";
 import type { Env } from "../functions/lib/types";
 import { addLocalDays, localDateInTokyo } from "../shared/domain";
 
@@ -116,6 +117,14 @@ function request(
 
 async function responseJson<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
+}
+
+async function handleRequest(requestValue: Request): Promise<Response> {
+  try {
+    return await handleApi(requestValue, env);
+  } catch (error) {
+    return errorResponse(error);
+  }
 }
 
 let testD1: TestD1;
@@ -287,5 +296,145 @@ describe("APIハンドラー", () => {
     expect(firstBody).toMatchObject({ amountYen: 100, achievementCount: 1 });
     expect(second.status).toBe(200);
     expect(secondBody.id).toBe(firstBody.id);
+  });
+
+  it("Content-Lengthなしでも4 KiB超のJSONを拒否する", async () => {
+    const response = await handleRequest(
+      request(
+        "/achievements",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            method: "self_report",
+            note: "あ".repeat(2000)
+          })
+        },
+        familyKey
+      )
+    );
+    const body = await responseJson<{ error: { code: string } }>(response);
+
+    expect(response.status).toBe(413);
+    expect(body.error.code).toBe("REQUEST_TOO_LARGE");
+  });
+
+  it("金額0円の達成も支払い済みにできる", async () => {
+    testD1.sqlite.exec(`
+      UPDATE allowance_rules
+      SET base_amount_yen = 0, bonus_amount_yen = 0
+      WHERE id = 1
+    `);
+    await handleApi(
+      request(
+        "/achievements",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ method: "timer" })
+        },
+        familyKey
+      ),
+      env
+    );
+    const sessionResponse = await handleApi(
+      request(
+        "/parent/session",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: "1234" })
+        },
+        familyKey
+      ),
+      env
+    );
+    const { token } = await responseJson<{ token: string }>(sessionResponse);
+    const settlement = await handleApi(
+      request(
+        "/parent/payments/settle",
+        {
+          method: "POST",
+          headers: { "Idempotency-Key": "zero-value-settlement" }
+        },
+        familyKey,
+        token
+      ),
+      env
+    );
+    const body = await responseJson<{
+      amountYen: number;
+      achievementCount: number;
+    }>(settlement);
+    const unpaid = testD1.sqlite
+      .prepare("SELECT COUNT(*) AS count FROM unpaid_achievements")
+      .get() as { count: number };
+
+    expect(settlement.status).toBe(201);
+    expect(body).toMatchObject({ amountYen: 0, achievementCount: 1 });
+    expect(unpaid.count).toBe(0);
+  });
+
+  it("PINを5回間違えると一時的にロックする", async () => {
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      const response = await handleRequest(
+        request(
+          "/parent/session",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pin: "9999" })
+          },
+          familyKey
+        )
+      );
+      expect(response.status).toBe(attempt < 5 ? 403 : 429);
+    }
+
+    const locked = await handleRequest(
+      request(
+        "/parent/session",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: "1234" })
+        },
+        familyKey
+      )
+    );
+    expect(locked.status).toBe(429);
+
+    testD1.sqlite.exec(`
+      UPDATE app_settings
+      SET pin_locked_until_utc = '2000-01-01T00:00:00.000Z'
+      WHERE id = 1
+    `);
+    const unlocked = await handleRequest(
+      request(
+        "/parent/session",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: "1234" })
+        },
+        familyKey
+      )
+    );
+    const settings = testD1.sqlite
+      .prepare(
+        `SELECT pin_failed_attempts, pin_locked_until_utc
+         FROM app_settings
+         WHERE id = 1`
+      )
+      .get() as {
+      pin_failed_attempts: number;
+      pin_locked_until_utc: string | null;
+    };
+
+    expect(unlocked.status).toBe(200);
+    expect(settings).toEqual({
+      pin_failed_attempts: 0,
+      pin_locked_until_utc: null
+    });
   });
 });
