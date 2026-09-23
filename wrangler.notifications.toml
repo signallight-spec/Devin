@@ -8,4 +8,4 @@ crons = ["*/5 * * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "study-habit"
-database_id = "replace-with-your-d1-id"
+database_id = "0f3e3ef1-632b-4d59-ba30-2bad5c98d3fc"
