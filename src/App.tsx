@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { clearFamilyKey, getFamilyKey } from "./api";
+import {
+  clearFamilyKey,
+  clearPendingSetupKey,
+  getFamilyKey,
+  getPendingSetupKey
+} from "./api";
 import { Layout, type Page } from "./components/Layout";
 import { CalendarScreen } from "./screens/CalendarScreen";
 import { HomeScreen } from "./screens/HomeScreen";
@@ -18,6 +23,9 @@ function pageFromHash(): Page {
 
 export default function App() {
   const [hasFamilyKey, setHasFamilyKey] = useState(Boolean(getFamilyKey()));
+  const [hasPendingSetupKey, setHasPendingSetupKey] = useState(
+    Boolean(getPendingSetupKey())
+  );
   const [page, setPage] = useState<Page>(pageFromHash);
 
   useEffect(() => {
@@ -43,10 +51,19 @@ export default function App() {
     }
     clearFamilyKey();
     setHasFamilyKey(false);
+    setHasPendingSetupKey(false);
   };
 
-  if (!hasFamilyKey) {
-    return <SetupScreen onReady={() => setHasFamilyKey(true)} />;
+  if (!hasFamilyKey || hasPendingSetupKey) {
+    return (
+      <SetupScreen
+        onReady={() => {
+          clearPendingSetupKey();
+          setHasPendingSetupKey(false);
+          setHasFamilyKey(true);
+        }}
+      />
+    );
   }
 
   return (

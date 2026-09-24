@@ -163,6 +163,10 @@ describe("Push通知", () => {
     expect(
       vi.mocked(subscription.unsubscribe).mock.invocationCallOrder[0]
     ).toBeLessThan(apiMocks.deletePushSubscription.mock.invocationCallOrder[0]);
+    await expect(disablePushNotifications()).resolves.toBeUndefined();
+    expect(subscription.unsubscribe).toHaveBeenCalledOnce();
+    expect(apiMocks.deletePushSubscription).toHaveBeenCalledTimes(2);
+    expect(localStorage.length).toBe(0);
   });
 
   it("家族キー削除時のサーバー解除失敗を同じ通知先で再試行する", async () => {

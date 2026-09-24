@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   api,
+  ApiError,
+  clearFamilyKey,
   generateFamilyKey,
   getFamilyKey,
+  getPendingSetupKey,
   setFamilyKey
 } from "../api";
 import { StatusMessage } from "../components/StatusMessage";
@@ -12,7 +15,8 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
   const [showInitialSetup, setShowInitialSetup] = useState(false);
   const [bootstrapToken, setBootstrapToken] = useState("");
   const [pin, setPin] = useState("");
-  const [generatedKey, setGeneratedKey] = useState("");
+  const [generatedKey, setGeneratedKey] = useState(getPendingSetupKey);
+  const [setupConfirmed, setSetupConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
@@ -46,6 +50,38 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
     }
   };
 
+  const confirmPendingSetup = useCallback(async () => {
+    if (!generatedKey) {
+      return;
+    }
+    setBusy(true);
+    setMessage("");
+    try {
+      await api.validateFamilyKey(generatedKey);
+      setSetupConfirmed(true);
+    } catch (error) {
+      if (error instanceof ApiError && error.status < 500) {
+        clearFamilyKey();
+        setGeneratedKey("");
+        setMessage(
+          "初期設定は完了していません。初期設定用トークンとPINを入力して、もう一度お試しください。"
+        );
+      } else {
+        setMessage(
+          "初期設定の結果を確認できませんでした。家族キーを保存し、通信状態を確認して再試行してください。"
+        );
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [generatedKey]);
+
+  useEffect(() => {
+    if (generatedKey && !setupConfirmed) {
+      void confirmPendingSetup();
+    }
+  }, [confirmPendingSetup, generatedKey, setupConfirmed]);
+
   const setup = async () => {
     setBusy(true);
     setMessage("");
@@ -62,7 +98,9 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
       });
       setFamilyKey(result.familyKey);
       setGeneratedKey(result.familyKey);
+      setSetupConfirmed(true);
     } catch (error) {
+      setGeneratedKey(getPendingSetupKey());
       setMessage(error instanceof Error ? error.message : "初期設定に失敗しました。");
     } finally {
       setBusy(false);
@@ -77,7 +115,7 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
           <p className="eyebrow">初期設定完了</p>
           <h1>家族キーを保存してください</h1>
           <p className="lead">
-            親の端末を設定するときに使います。この画面を閉じると再表示できません。
+            親の端末を設定するときに使います。保存を確認するまでこの画面を再表示します。
           </p>
           <div className="one-time-key">
             <input
@@ -97,12 +135,31 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
             </button>
           </div>
           <StatusMessage
-            message={copyMessage}
-            tone={copyMessage === "コピーしました。" ? "success" : "error"}
+            message={copyMessage || message}
+            tone={
+              copyMessage === "コピーしました。" || setupConfirmed
+                ? "success"
+                : "error"
+            }
           />
-          <button className="primary-button" onClick={onReady} type="button">
-            保存したので始める
+          <button
+            className="primary-button"
+            disabled={!setupConfirmed || busy}
+            onClick={onReady}
+            type="button"
+          >
+            {busy ? "確認中…" : "保存したので始める"}
           </button>
+          {!setupConfirmed && (
+            <button
+              className="text-button"
+              disabled={busy}
+              onClick={() => void confirmPendingSetup()}
+              type="button"
+            >
+              初期設定を再確認
+            </button>
+          )}
         </section>
       </main>
     );

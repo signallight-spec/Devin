@@ -5,6 +5,38 @@ const SERVICE_WORKER_TIMEOUT_MESSAGE =
   "通知の準備が完了しませんでした。ページを再読み込みして、もう一度お試しください。";
 const PENDING_PUSH_DELETION_STORAGE = "study-habit-pending-push-deletion";
 
+interface PendingPushDeletion {
+  endpoint: string;
+  browserUnsubscribed: boolean;
+}
+
+function pendingPushDeletion(): PendingPushDeletion | null {
+  const stored = localStorage.getItem(PENDING_PUSH_DELETION_STORAGE);
+  if (!stored) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(stored) as Partial<PendingPushDeletion>;
+    if (
+      typeof parsed.endpoint === "string" &&
+      typeof parsed.browserUnsubscribed === "boolean"
+    ) {
+      return {
+        endpoint: parsed.endpoint,
+        browserUnsubscribed: parsed.browserUnsubscribed
+      };
+    }
+  } catch {
+    return { endpoint: stored, browserUnsubscribed: true };
+  }
+  localStorage.removeItem(PENDING_PUSH_DELETION_STORAGE);
+  return null;
+}
+
+function savePendingPushDeletion(value: PendingPushDeletion): void {
+  localStorage.setItem(PENDING_PUSH_DELETION_STORAGE, JSON.stringify(value));
+}
+
 function applicationServerKey(value: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - value.length % 4) % 4);
   const decoded = atob((value + padding).replace(/-/g, "+").replace(/_/g, "/"));
@@ -74,6 +106,14 @@ export async function currentPushSubscription(): Promise<PushSubscription | null
   return registration.pushManager.getSubscription();
 }
 
+async function existingPushSubscription(): Promise<PushSubscription | null> {
+  if (!pushSupported()) {
+    return null;
+  }
+  const registration = await navigator.serviceWorker.getRegistration("/");
+  return registration?.pushManager.getSubscription() ?? null;
+}
+
 export async function syncPushSubscription(
   subscription: PushSubscription
 ): Promise<void> {
@@ -99,42 +139,51 @@ export async function enablePushNotifications(
   await syncPushSubscription(subscription);
 }
 
-export async function disablePushNotifications(): Promise<void> {
-  const subscription = await currentPushSubscription();
-  if (!subscription) {
-    return;
+async function removePushSubscription(
+  ignoreUnauthorized: boolean,
+  findSubscription: () => Promise<PushSubscription | null>
+): Promise<void> {
+  let pending = pendingPushDeletion();
+  if (!pending) {
+    const subscription = await findSubscription();
+    if (!subscription) {
+      return;
+    }
+    pending = {
+      endpoint: subscription.endpoint,
+      browserUnsubscribed: false
+    };
+    savePendingPushDeletion(pending);
+    if (await subscription.unsubscribe() === false) {
+      throw new Error("この端末の通知購読を解除できませんでした。もう一度お試しください。");
+    }
+    pending = { ...pending, browserUnsubscribed: true };
+    savePendingPushDeletion(pending);
+  } else if (!pending.browserUnsubscribed) {
+    const subscription = await findSubscription();
+    if (
+      subscription?.endpoint === pending.endpoint &&
+      await subscription.unsubscribe() === false
+    ) {
+      throw new Error("この端末の通知購読を解除できませんでした。もう一度お試しください。");
+    }
+    pending = { ...pending, browserUnsubscribed: true };
+    savePendingPushDeletion(pending);
   }
-  if (await subscription.unsubscribe() === false) {
-    throw new Error("この端末の通知購読を解除できませんでした。もう一度お試しください。");
-  }
-  await api.deletePushSubscription(subscription.endpoint);
-}
-
-export async function disconnectPushBeforeFamilyKeyRemoval(): Promise<void> {
-  const pendingEndpoint = localStorage.getItem(PENDING_PUSH_DELETION_STORAGE);
-  if (pendingEndpoint) {
-    await api.deletePushSubscription(pendingEndpoint);
-    localStorage.removeItem(PENDING_PUSH_DELETION_STORAGE);
-    return;
-  }
-  if (!pushSupported()) {
-    return;
-  }
-  const registration = await navigator.serviceWorker.getRegistration("/");
-  const subscription = await registration?.pushManager.getSubscription();
-  if (!subscription) {
-    return;
-  }
-  if (await subscription.unsubscribe() === false) {
-    throw new Error("この端末の通知購読を解除できませんでした。もう一度お試しください。");
-  }
-  localStorage.setItem(PENDING_PUSH_DELETION_STORAGE, subscription.endpoint);
   try {
-    await api.deletePushSubscription(subscription.endpoint);
+    await api.deletePushSubscription(pending.endpoint);
   } catch (error) {
-    if (!(error instanceof ApiError && error.status === 401)) {
+    if (!(ignoreUnauthorized && error instanceof ApiError && error.status === 401)) {
       throw error;
     }
   }
   localStorage.removeItem(PENDING_PUSH_DELETION_STORAGE);
+}
+
+export async function disablePushNotifications(): Promise<void> {
+  await removePushSubscription(false, currentPushSubscription);
+}
+
+export async function disconnectPushBeforeFamilyKeyRemoval(): Promise<void> {
+  await removePushSubscription(true, existingPushSubscription);
 }

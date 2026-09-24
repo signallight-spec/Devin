@@ -9,6 +9,8 @@ import type {
 } from "./types";
 
 const FAMILY_KEY_STORAGE = "study-habit-family-key";
+const PENDING_SETUP_KEY_STORAGE = "study-habit-pending-setup-key";
+const PENDING_ROTATED_KEY_STORAGE = "study-habit-pending-rotated-key";
 const PARENT_TOKEN_STORAGE = "study-habit-parent-token";
 const SETTLEMENT_KEY_STORAGE = "study-habit-settlement-key";
 
@@ -30,6 +32,30 @@ export function setFamilyKey(value: string): void {
   localStorage.setItem(FAMILY_KEY_STORAGE, value);
 }
 
+export function getPendingSetupKey(): string {
+  return localStorage.getItem(PENDING_SETUP_KEY_STORAGE) ?? "";
+}
+
+export function setPendingSetupKey(value: string): void {
+  localStorage.setItem(PENDING_SETUP_KEY_STORAGE, value);
+}
+
+export function clearPendingSetupKey(): void {
+  localStorage.removeItem(PENDING_SETUP_KEY_STORAGE);
+}
+
+export function getPendingRotatedKey(): string {
+  return localStorage.getItem(PENDING_ROTATED_KEY_STORAGE) ?? "";
+}
+
+export function setPendingRotatedKey(value: string): void {
+  localStorage.setItem(PENDING_ROTATED_KEY_STORAGE, value);
+}
+
+export function clearPendingRotatedKey(): void {
+  localStorage.removeItem(PENDING_ROTATED_KEY_STORAGE);
+}
+
 export function generateFamilyKey(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   let binary = "";
@@ -44,6 +70,8 @@ export function generateFamilyKey(): string {
 
 export function clearFamilyKey(): void {
   localStorage.removeItem(FAMILY_KEY_STORAGE);
+  clearPendingSetupKey();
+  clearPendingRotatedKey();
   sessionStorage.removeItem(PARENT_TOKEN_STORAGE);
 }
 
@@ -139,6 +167,7 @@ export const api = {
     input: InitialSetupInput
   ): Promise<{ familyKey: string }> {
     setFamilyKey(input.familyKey);
+    setPendingSetupKey(input.familyKey);
     try {
       return await setupRequest(input);
     } catch (setupError) {

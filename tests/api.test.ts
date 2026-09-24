@@ -3,7 +3,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   api,
+  clearPendingRotatedKey,
   getFamilyKey,
+  getPendingRotatedKey,
+  getPendingSetupKey,
+  setPendingRotatedKey,
   setFamilyKey,
   setParentToken
 } from "../src/api";
@@ -44,6 +48,14 @@ afterEach(() => {
 });
 
 describe("APIクライアント", () => {
+  it("確認前の再発行キーを再読み込み後も保持する", () => {
+    const rotatedKey = "B".repeat(43);
+    setPendingRotatedKey(rotatedKey);
+    expect(getPendingRotatedKey()).toBe(rotatedKey);
+    clearPendingRotatedKey();
+    expect(getPendingRotatedKey()).toBe("");
+  });
+
   it("初期設定の結果が不明な場合は同じ家族キーで再試行する", async () => {
     const candidateFamilyKey = "A".repeat(43);
     const fetchMock = vi
@@ -84,6 +96,7 @@ describe("APIクライアント", () => {
       "初期設定の結果を確認できませんでした。同じ家族キーで再試行します。"
     );
     expect(getFamilyKey()).toBe(candidateFamilyKey);
+    expect(getPendingSetupKey()).toBe(candidateFamilyKey);
     await expect(api.setupRecoverable(input)).resolves.toMatchObject({
       familyKey: candidateFamilyKey
     });
