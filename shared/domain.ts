@@ -57,6 +57,12 @@ export function localTimeInTokyo(date: Date): string {
   return `${values.hour}:${values.minute}`;
 }
 
+export function millisecondsUntilNextTokyoDay(date: Date): number {
+  const [year, month, day] = localDateInTokyo(date).split("-").map(Number);
+  const nextMidnightUtc = Date.UTC(year, month - 1, day + 1, -9);
+  return Math.max(0, nextMidnightUtc - date.getTime());
+}
+
 export function mondayWeekRange(localDate: string): {
   start: string;
   end: string;

@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import {
+  localDateInTokyo,
+  millisecondsUntilNextTokyoDay
+} from "../../shared/domain";
 import { api } from "../api";
 import { CharacterCard } from "../components/Character";
 import { StatusMessage } from "../components/StatusMessage";
@@ -71,11 +75,16 @@ function RecordForm({
   );
 }
 
-export function HomeScreen({ onInvalidKey }: { onInvalidKey: () => void }) {
+export function HomeScreen({
+  onInvalidKey
+}: {
+  onInvalidKey: () => Promise<void>;
+}) {
   const [today, setToday] = useState<Today | null>(null);
   const [recordMethod, setRecordMethod] = useState<"timer" | "self_report" | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [keyResetBusy, setKeyResetBusy] = useState(false);
   const timer = useTimer(today?.goalMinutes ?? 25);
 
   const load = useCallback(async () => {
@@ -96,6 +105,55 @@ export function HomeScreen({ onInvalidKey }: { onInvalidKey: () => void }) {
     void load();
   }, [load]);
 
+  const todayLocalDate = today?.localDate;
+  useEffect(() => {
+    if (!todayLocalDate) {
+      return;
+    }
+    let timeoutId: number;
+    const refreshIfDateChanged = () => {
+      window.clearTimeout(timeoutId);
+      if (localDateInTokyo(new Date()) !== todayLocalDate) {
+        setRecordMethod(null);
+        void load();
+        return;
+      }
+      timeoutId = window.setTimeout(
+        refreshIfDateChanged,
+        millisecondsUntilNextTokyoDay(new Date()) + 100
+      );
+    };
+    timeoutId = window.setTimeout(
+      refreshIfDateChanged,
+      millisecondsUntilNextTokyoDay(new Date()) + 100
+    );
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshIfDateChanged();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [load, todayLocalDate]);
+
+  const resetFamilyKey = async () => {
+    setKeyResetBusy(true);
+    try {
+      await onInvalidKey();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "通知の解除に失敗したため、家族キーを保持しました。"
+      );
+    } finally {
+      setKeyResetBusy(false);
+    }
+  };
+
   useEffect(() => {
     if (timer.completed && !today?.achievement) {
       setRecordMethod("timer");
@@ -111,7 +169,14 @@ export function HomeScreen({ onInvalidKey }: { onInvalidKey: () => void }) {
         <StatusMessage message={message || "読み込めませんでした。"} />
         <div className="button-row">
           <button className="secondary-button" onClick={load} type="button">再試行</button>
-          <button className="text-button" onClick={onInvalidKey} type="button">家族キーを変更</button>
+          <button
+            className="text-button"
+            disabled={keyResetBusy}
+            onClick={resetFamilyKey}
+            type="button"
+          >
+            家族キーを変更
+          </button>
         </div>
       </section>
     );

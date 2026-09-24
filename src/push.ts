@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, ApiError } from "./api";
 
 const SERVICE_WORKER_TIMEOUT_MS = 15_000;
 const SERVICE_WORKER_TIMEOUT_MESSAGE =
@@ -103,6 +103,29 @@ export async function disablePushNotifications(): Promise<void> {
   if (!subscription) {
     return;
   }
-  await subscription.unsubscribe();
   await api.deletePushSubscription(subscription.endpoint);
+  if (await subscription.unsubscribe() === false) {
+    throw new Error("この端末の通知購読を解除できませんでした。もう一度お試しください。");
+  }
+}
+
+export async function disconnectPushBeforeFamilyKeyRemoval(): Promise<void> {
+  if (!pushSupported()) {
+    return;
+  }
+  const registration = await navigator.serviceWorker.getRegistration("/");
+  const subscription = await registration?.pushManager.getSubscription();
+  if (!subscription) {
+    return;
+  }
+  try {
+    await api.deletePushSubscription(subscription.endpoint);
+  } catch (error) {
+    if (!(error instanceof ApiError && error.status === 401)) {
+      throw error;
+    }
+  }
+  if (await subscription.unsubscribe() === false) {
+    throw new Error("この端末の通知購読を解除できませんでした。もう一度お試しください。");
+  }
 }

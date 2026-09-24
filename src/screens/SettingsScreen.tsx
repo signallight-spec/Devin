@@ -9,7 +9,11 @@ import {
   syncPushSubscription
 } from "../push";
 
-export function SettingsScreen({ onFamilyKeyReset }: { onFamilyKeyReset: () => void }) {
+export function SettingsScreen({
+  onFamilyKeyReset
+}: {
+  onFamilyKeyReset: () => Promise<void>;
+}) {
   const [goalMinutes, setGoalMinutes] = useState(25);
   const [notification, setNotification] = useState({
     enabled: true,
@@ -92,6 +96,26 @@ export function SettingsScreen({ onFamilyKeyReset }: { onFamilyKeyReset: () => v
     }
   };
 
+  const resetFamilyKey = async () => {
+    if (!window.confirm("この端末から家族キーを削除しますか？")) {
+      return;
+    }
+    setPushBusy(true);
+    setPushMessage("");
+    try {
+      await onFamilyKeyReset();
+    } catch (error) {
+      setPushTone("error");
+      setPushMessage(
+        error instanceof Error
+          ? error.message
+          : "通知の解除に失敗したため、家族キーを保持しました。"
+      );
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
   return (
     <div className="stack">
       <section className="card settings-card">
@@ -154,7 +178,12 @@ export function SettingsScreen({ onFamilyKeyReset }: { onFamilyKeyReset: () => v
       <section className="card muted-card">
         <h2>この端末の家族キー</h2>
         <p>キーを入れ直す場合だけ使用してください。</p>
-        <button className="text-button danger" onClick={onFamilyKeyReset} type="button">
+        <button
+          className="text-button danger"
+          disabled={pushBusy}
+          onClick={resetFamilyKey}
+          type="button"
+        >
           家族キーを削除
         </button>
       </section>

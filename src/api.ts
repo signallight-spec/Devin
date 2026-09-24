@@ -4,6 +4,7 @@ import type {
   CalendarData,
   ParentDashboard,
   Payment,
+  Settlement,
   Today
 } from "./types";
 
@@ -58,6 +59,22 @@ export function clearParentToken(): void {
   sessionStorage.removeItem(PARENT_TOKEN_STORAGE);
 }
 
+interface InitialSetupInput {
+  bootstrapToken: string;
+  familyKey: string;
+  pin: string;
+  goalMinutes: number;
+  baseAmountYen: number;
+  bonusIntervalDays: number;
+  bonusAmountYen: number;
+}
+
+interface InitialSetupResult {
+  familyKey: string;
+  settings: { goalMinutes: number; updatedAt: string };
+  allowanceRule: AllowanceRule;
+}
+
 async function apiRequest<T>(
   path: string,
   init: RequestInit = {},
@@ -98,26 +115,51 @@ async function apiRequest<T>(
   return response.json() as Promise<T>;
 }
 
+async function setupRequest(input: InitialSetupInput): Promise<InitialSetupResult> {
+  const { bootstrapToken, ...body } = input;
+  return apiRequest<InitialSetupResult>(
+    "/setup",
+    { method: "POST", body: JSON.stringify(body) },
+    { bootstrapToken }
+  );
+}
+
+function setupResultMayBeUnknown(error: unknown): boolean {
+  return (
+    !(error instanceof ApiError) ||
+    error.status >= 500 ||
+    error.code === "ALREADY_SETUP"
+  );
+}
+
 export const api = {
-  setup(input: {
-    bootstrapToken: string;
-    familyKey: string;
-    pin: string;
-    goalMinutes: number;
-    baseAmountYen: number;
-    bonusIntervalDays: number;
-    bonusAmountYen: number;
-  }) {
-    const { bootstrapToken, ...body } = input;
-    return apiRequest<{
-      familyKey: string;
-      settings: { goalMinutes: number; updatedAt: string };
-      allowanceRule: AllowanceRule;
-    }>(
-      "/setup",
-      { method: "POST", body: JSON.stringify(body) },
-      { bootstrapToken }
-    );
+  setup(input: InitialSetupInput) {
+    return setupRequest(input);
+  },
+  async setupRecoverable(
+    input: InitialSetupInput
+  ): Promise<{ familyKey: string }> {
+    setFamilyKey(input.familyKey);
+    try {
+      return await setupRequest(input);
+    } catch (setupError) {
+      if (!setupResultMayBeUnknown(setupError)) {
+        clearFamilyKey();
+        throw setupError;
+      }
+      try {
+        await apiRequest<Today>("/today", {}, { familyKey: input.familyKey });
+        return { familyKey: input.familyKey };
+      } catch (validationError) {
+        if (validationError instanceof ApiError && validationError.status < 500) {
+          clearFamilyKey();
+          throw setupError;
+        }
+        throw new Error(
+          "初期設定の結果を確認できませんでした。同じ家族キーで再試行します。"
+        );
+      }
+    }
   },
   today() {
     return apiRequest<Today>("/today");
@@ -215,7 +257,7 @@ export const api = {
       localStorage.getItem(SETTLEMENT_KEY_STORAGE) ?? crypto.randomUUID();
     localStorage.setItem(SETTLEMENT_KEY_STORAGE, idempotencyKey);
     try {
-      const payment = await apiRequest<Payment>(
+      const payment = await apiRequest<Settlement>(
         "/parent/payments/settle",
         {
           method: "POST",

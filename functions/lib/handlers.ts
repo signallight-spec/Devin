@@ -297,6 +297,7 @@ function subscriptionValues(body: Record<string, unknown>): {
   }
   if (
     parsedEndpoint.protocol !== "https:" ||
+    parsedEndpoint.port !== "" ||
     (!PUSH_SERVICE_HOSTS.has(parsedEndpoint.hostname) &&
       !(
         CHROME_PUSH_SERVICE_HOST_PATTERN.test(parsedEndpoint.hostname) &&
@@ -810,7 +811,7 @@ async function handleSettle(
   }
   const existing = await paymentByIdempotency(env, idempotencyKey);
   if (existing) {
-    return json(mapPayment(existing));
+    return json({ ...mapPayment(existing), replayed: true });
   }
   const paymentId = crypto.randomUUID();
   const nowIso = now.toISOString();
@@ -870,7 +871,7 @@ async function handleSettle(
   } catch {
     const concurrent = await paymentByIdempotency(env, idempotencyKey);
     if (concurrent) {
-      return json(mapPayment(concurrent));
+      return json({ ...mapPayment(concurrent), replayed: true });
     }
     throw new HttpError(500, "SETTLEMENT_FAILED", "支払いを記録できませんでした。");
   }
@@ -882,7 +883,7 @@ async function handleSettle(
       "未払いの達成記録はありません。"
     );
   }
-  return json(mapPayment(payment), 201);
+  return json({ ...mapPayment(payment), replayed: false }, 201);
 }
 
 function csvCell(value: string | number | null): string {

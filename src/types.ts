@@ -85,3 +85,7 @@ export interface Payment {
   paidAt: string;
   achievementCount: number;
 }
+
+export interface Settlement extends Payment {
+  replayed: boolean;
+}

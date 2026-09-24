@@ -6,6 +6,7 @@ import {
   characterSpeciesForCycle,
   displayedStreak,
   localDateInTokyo,
+  millisecondsUntilNextTokyoDay,
   mondayWeekRange
 } from "../shared/domain";
 import { shortDate } from "../src/format";
@@ -18,6 +19,15 @@ describe("学習記録の計算", () => {
   it("日本時間の日付をUTC境界から計算する", () => {
     expect(localDateInTokyo(new Date("2026-09-22T14:59:59Z"))).toBe("2026-09-22");
     expect(localDateInTokyo(new Date("2026-09-22T15:00:00Z"))).toBe("2026-09-23");
+  });
+
+  it("次の日本時間0時までの待機時間を計算する", () => {
+    expect(
+      millisecondsUntilNextTokyoDay(new Date("2026-09-24T14:59:59.000Z"))
+    ).toBe(1_000);
+    expect(
+      millisecondsUntilNextTokyoDay(new Date("2026-09-24T15:00:00.000Z"))
+    ).toBe(24 * 60 * 60 * 1_000);
   });
 
   it("前日に達成していれば連続日数を増やす", () => {

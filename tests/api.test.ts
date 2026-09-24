@@ -1,7 +1,12 @@
 /// <reference lib="dom" />
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, setFamilyKey, setParentToken } from "../src/api";
+import {
+  api,
+  getFamilyKey,
+  setFamilyKey,
+  setParentToken
+} from "../src/api";
 
 function memoryStorage(): Storage {
   const values = new Map<string, string>();
@@ -39,6 +44,61 @@ afterEach(() => {
 });
 
 describe("APIクライアント", () => {
+  it("初期設定の結果が不明な場合は同じ家族キーで再試行する", async () => {
+    const candidateFamilyKey = "A".repeat(43);
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("setup response lost"))
+      .mockRejectedValueOnce(new TypeError("validation unavailable"))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "ALREADY_SETUP",
+              message: "初期設定は完了しています。"
+            }
+          }),
+          {
+            status: 409,
+            headers: { "Content-Type": "application/json" }
+          }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ localDate: "2026-09-24" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const input = {
+      bootstrapToken: "bootstrap-token",
+      familyKey: candidateFamilyKey,
+      pin: "1234",
+      goalMinutes: 25,
+      baseAmountYen: 100,
+      bonusIntervalDays: 7,
+      bonusAmountYen: 300
+    };
+
+    await expect(api.setupRecoverable(input)).rejects.toThrow(
+      "初期設定の結果を確認できませんでした。同じ家族キーで再試行します。"
+    );
+    expect(getFamilyKey()).toBe(candidateFamilyKey);
+    await expect(api.setupRecoverable(input)).resolves.toMatchObject({
+      familyKey: candidateFamilyKey
+    });
+
+    const firstBody = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+      familyKey: string;
+    };
+    const retryBody = JSON.parse(String(fetchMock.mock.calls[2][1]?.body)) as {
+      familyKey: string;
+    };
+    expect(firstBody.familyKey).toBe(candidateFamilyKey);
+    expect(retryBody.familyKey).toBe(candidateFamilyKey);
+  });
+
   it("精算の通信再試行では同じ冪等性キーを使う", async () => {
     const fetchMock = vi
       .fn()

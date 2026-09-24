@@ -294,7 +294,8 @@ describe("APIハンドラー", () => {
 
     for (const endpoint of [
       "https://jmt17.google.com/not-fcm/subscription-id",
-      "https://anything.google.com/fcm/send/subscription-id"
+      "https://anything.google.com/fcm/send/subscription-id",
+      "https://jmt17.google.com:8443/fcm/send/subscription-id"
     ]) {
       const rejected = await handleRequest(
         request(
@@ -647,18 +648,38 @@ describe("APIハンドラー", () => {
       );
 
     const first = await handleApi(settlementRequest(), env);
+    const nextDate = addLocalDays(localDateInTokyo(new Date()), 1);
+    testD1.sqlite.prepare(`
+      INSERT INTO achievements (
+        id, local_date, method, subject, note, target_minutes, streak_days,
+        base_amount_yen, bonus_amount_yen, total_amount_yen,
+        allowance_rule_id, achieved_at_utc
+      ) VALUES (?, ?, 'timer', NULL, NULL, 25, 1, 100, 0, 100, 1, ?)
+    `).run("later-achievement", nextDate, `${nextDate}T01:00:00.000Z`);
     const second = await handleApi(settlementRequest(), env);
     const firstBody = await responseJson<{
       id: string;
       amountYen: number;
       achievementCount: number;
+      replayed: boolean;
     }>(first);
-    const secondBody = await responseJson<{ id: string }>(second);
+    const secondBody = await responseJson<{
+      id: string;
+      replayed: boolean;
+    }>(second);
+    const unpaid = testD1.sqlite
+      .prepare("SELECT COUNT(*) AS count FROM unpaid_achievements")
+      .get() as { count: number };
 
     expect(first.status).toBe(201);
-    expect(firstBody).toMatchObject({ amountYen: 100, achievementCount: 1 });
+    expect(firstBody).toMatchObject({
+      amountYen: 100,
+      achievementCount: 1,
+      replayed: false
+    });
     expect(second.status).toBe(200);
-    expect(secondBody.id).toBe(firstBody.id);
+    expect(secondBody).toMatchObject({ id: firstBody.id, replayed: true });
+    expect(unpaid.count).toBe(1);
   });
 
   it("Content-Lengthなしでも4 KiB超のJSONを拒否する", async () => {

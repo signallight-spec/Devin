@@ -6,6 +6,7 @@ import { HomeScreen } from "./screens/HomeScreen";
 import { ParentScreen } from "./screens/ParentScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { SetupScreen } from "./screens/SetupScreen";
+import { disconnectPushBeforeFamilyKeyRemoval } from "./push";
 
 function pageFromHash(): Page {
   const value = window.location.hash.slice(1);
@@ -31,6 +32,19 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const resetFamilyKey = async () => {
+    try {
+      await disconnectPushBeforeFamilyKeyRemoval();
+    } catch (error) {
+      throw new Error(
+        "通知の解除に失敗したため、家族キーは削除していません。通信状態を確認して、もう一度お試しください。",
+        { cause: error }
+      );
+    }
+    clearFamilyKey();
+    setHasFamilyKey(false);
+  };
+
   if (!hasFamilyKey) {
     return <SetupScreen onReady={() => setHasFamilyKey(true)} />;
   }
@@ -39,21 +53,13 @@ export default function App() {
     <Layout onNavigate={navigate} page={page}>
       {page === "home" && (
         <HomeScreen
-          onInvalidKey={() => {
-            clearFamilyKey();
-            setHasFamilyKey(false);
-          }}
+          onInvalidKey={resetFamilyKey}
         />
       )}
       {page === "calendar" && <CalendarScreen />}
       {page === "settings" && (
         <SettingsScreen
-          onFamilyKeyReset={() => {
-            if (window.confirm("この端末から家族キーを削除しますか？")) {
-              clearFamilyKey();
-              setHasFamilyKey(false);
-            }
-          }}
+          onFamilyKeyReset={resetFamilyKey}
         />
       )}
       {page === "parent" && <ParentScreen />}

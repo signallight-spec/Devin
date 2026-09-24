@@ -8,13 +8,19 @@ const apiMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/api", () => ({
+  ApiError: class ApiError extends Error {
+    readonly status = 401;
+  },
   api: {
     savePushSubscription: apiMocks.savePushSubscription,
     deletePushSubscription: apiMocks.deletePushSubscription
   }
 }));
 
-import { enablePushNotifications } from "../src/push";
+import {
+  disconnectPushBeforeFamilyKeyRemoval,
+  enablePushNotifications
+} from "../src/push";
 
 function pushSubscription(): PushSubscription {
   return {
@@ -106,5 +112,31 @@ describe("Push通知", () => {
 
     await rejection;
     expect(apiMocks.savePushSubscription).not.toHaveBeenCalled();
+  });
+
+  it("家族キー削除前の通知解除に失敗した場合は購読を保持して再試行できる", async () => {
+    const subscription = pushSubscription();
+    vi.mocked(subscription.unsubscribe).mockResolvedValue(true);
+    const registered = registration(subscription, {} as ServiceWorker);
+    vi.mocked(registered.pushManager.getSubscription).mockResolvedValue(
+      subscription
+    );
+    const serviceWorker = {
+      getRegistration: vi.fn().mockResolvedValue(registered),
+      register: vi.fn(),
+      ready: Promise.resolve(registered)
+    };
+    vi.stubGlobal("navigator", { serviceWorker });
+    apiMocks.deletePushSubscription
+      .mockRejectedValueOnce(new TypeError("network failure"))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(disconnectPushBeforeFamilyKeyRemoval()).rejects.toThrow(
+      "network failure"
+    );
+    expect(subscription.unsubscribe).not.toHaveBeenCalled();
+    await expect(disconnectPushBeforeFamilyKeyRemoval()).resolves.toBeUndefined();
+    expect(apiMocks.deletePushSubscription).toHaveBeenCalledTimes(2);
+    expect(subscription.unsubscribe).toHaveBeenCalledOnce();
   });
 });

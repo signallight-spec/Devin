@@ -13,7 +13,8 @@ import type {
   Achievement,
   AllowanceRule,
   ParentDashboard,
-  Payment
+  Payment,
+  Settlement
 } from "../types";
 
 function ParentLogin({ onLogin }: { onLogin: () => void }) {
@@ -142,7 +143,7 @@ export function ParentScreen() {
   const settle = async () => {
     setBusy(true);
     setMessage("");
-    let payment: Payment;
+    let payment: Settlement;
     try {
       payment = await api.settle();
     } catch (error) {
@@ -151,13 +152,17 @@ export function ParentScreen() {
       setBusy(false);
       return;
     }
-    const successMessage = `${yen(payment.amountYen)}を支払い済みにしました。`;
-    setDashboard((value) => value ? {
-      ...value,
-      unpaidBalanceYen: 0,
-      unpaidAchievementCount: 0
-    } : value);
-    setAchievements((items) => items.map((item) => ({ ...item, paid: true })));
+    const successMessage = payment.replayed
+      ? `前回の${yen(payment.amountYen)}の支払い結果を確認しました。新しい未払いがあれば、もう一度「支払った」を押してください。`
+      : `${yen(payment.amountYen)}を支払い済みにしました。`;
+    if (!payment.replayed) {
+      setDashboard((value) => value ? {
+        ...value,
+        unpaidBalanceYen: 0,
+        unpaidAchievementCount: 0
+      } : value);
+      setAchievements((items) => items.map((item) => ({ ...item, paid: true })));
+    }
     setPayments((items) =>
       items.some((item) => item.id === payment.id) ? items : [payment, ...items]
     );
