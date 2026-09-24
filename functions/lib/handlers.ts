@@ -65,6 +65,7 @@ interface PinAttemptRow {
 
 const MAX_PIN_ATTEMPTS = 5;
 const PIN_LOCK_MINUTES = 5;
+const BONUS_INTERVAL_DAYS = 7;
 const FAMILY_KEY_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const PUSH_SERVICE_HOSTS = new Set([
   "fcm.googleapis.com",
@@ -155,7 +156,6 @@ async function handleSetup(request: Request, env: Env, now: Date): Promise<Respo
     "familyKey",
     "goalMinutes",
     "baseAmountYen",
-    "bonusIntervalDays",
     "bonusAmountYen"
   ]);
   const pin = requiredString(body, "pin", /^\d{4}$/);
@@ -172,13 +172,6 @@ async function handleSetup(request: Request, env: Env, now: Date): Promise<Respo
     );
   }
   const baseAmountYen = integerInRange(body, "baseAmountYen", 0, 100_000, 100);
-  const bonusIntervalDays = integerInRange(
-    body,
-    "bonusIntervalDays",
-    1,
-    365,
-    7
-  );
   const bonusAmountYen = integerInRange(
     body,
     "bonusAmountYen",
@@ -220,7 +213,7 @@ async function handleSetup(request: Request, env: Env, now: Date): Promise<Respo
         )
         .bind(
           baseAmountYen,
-          bonusIntervalDays,
+          BONUS_INTERVAL_DAYS,
           bonusAmountYen,
           nowIso,
           nowIso
@@ -724,18 +717,8 @@ async function handleRulesPost(
   now: Date
 ): Promise<Response> {
   const body = await readJsonObject(request);
-  rejectUnknownKeys(body, [
-    "baseAmountYen",
-    "bonusIntervalDays",
-    "bonusAmountYen"
-  ]);
+  rejectUnknownKeys(body, ["baseAmountYen", "bonusAmountYen"]);
   const baseAmountYen = integerInRange(body, "baseAmountYen", 0, 100_000);
-  const bonusIntervalDays = integerInRange(
-    body,
-    "bonusIntervalDays",
-    1,
-    365
-  );
   const bonusAmountYen = integerInRange(
     body,
     "bonusAmountYen",
@@ -752,7 +735,7 @@ async function handleRulesPost(
     )
     .bind(
       baseAmountYen,
-      bonusIntervalDays,
+      BONUS_INTERVAL_DAYS,
       bonusAmountYen,
       nowIso,
       nowIso
@@ -888,7 +871,8 @@ async function handleSettle(
 
 function csvCell(value: string | number | null): string {
   const text = value === null ? "" : String(value);
-  return `"${text.replace(/"/g, '""')}"`;
+  const safeText = /^[=+\-@\t\r\n]/.test(text) ? `'${text}` : text;
+  return `"${safeText.replace(/"/g, '""')}"`;
 }
 
 async function handleExport(env: Env): Promise<Response> {

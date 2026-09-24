@@ -79,7 +79,6 @@ export function ParentScreen() {
   const [busy, setBusy] = useState(false);
   const [ruleForm, setRuleForm] = useState({
     baseAmountYen: 100,
-    bonusIntervalDays: 7,
     bonusAmountYen: 300
   });
   const [newPin, setNewPin] = useState("");
@@ -113,7 +112,6 @@ export function ParentScreen() {
       setPayments(paymentResult.items);
       setRuleForm({
         baseAmountYen: nextDashboard.currentAllowanceRule.baseAmountYen,
-        bonusIntervalDays: nextDashboard.currentAllowanceRule.bonusIntervalDays,
         bonusAmountYen: nextDashboard.currentAllowanceRule.bonusAmountYen
       });
       setNotificationForm(nextDashboard.notificationSettings);
@@ -384,21 +382,7 @@ export function ParentScreen() {
             />
           </label>
           <label>
-            ボーナス間隔（日）
-            <input
-              min={1}
-              onChange={(event) =>
-                setRuleForm((value) => ({
-                  ...value,
-                  bonusIntervalDays: Number(event.target.value)
-                }))
-              }
-              type="number"
-              value={ruleForm.bonusIntervalDays}
-            />
-          </label>
-          <label>
-            ボーナス額
+            7日ごとのボーナス額
             <input
               min={0}
               onChange={(event) =>

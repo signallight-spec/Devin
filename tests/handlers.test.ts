@@ -610,6 +610,47 @@ describe("APIハンドラー", () => {
     });
   });
 
+  it("新しい小遣いルールのボーナス間隔を7日に固定する", async () => {
+    const token = await parentToken();
+    const created = await handleApi(
+      request(
+        "/parent/allowance-rules",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            baseAmountYen: 150,
+            bonusAmountYen: 500
+          })
+        },
+        familyKey,
+        token
+      ),
+      env
+    );
+    const rule = await responseJson<{ bonusIntervalDays: number }>(created);
+    expect(created.status).toBe(201);
+    expect(rule.bonusIntervalDays).toBe(7);
+
+    const rejected = await handleRequest(
+      request(
+        "/parent/allowance-rules",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            baseAmountYen: 150,
+            bonusIntervalDays: 1,
+            bonusAmountYen: 500
+          })
+        },
+        familyKey,
+        token
+      )
+    );
+    expect(rejected.status).toBe(400);
+  });
+
   it("支払いを冪等に一括精算する", async () => {
     await handleApi(
       request(
@@ -701,6 +742,35 @@ describe("APIハンドラー", () => {
 
     expect(response.status).toBe(413);
     expect(body.error.code).toBe("REQUEST_TOO_LARGE");
+  });
+
+  it("CSV出力で数式として解釈される学習内容を無害化する", async () => {
+    await handleApi(
+      request(
+        "/achievements",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            method: "self_report",
+            subject: "=SUM(A1:A2)",
+            note: "@IMPORTXML(\"https://example.test\")"
+          })
+        },
+        familyKey
+      ),
+      env
+    );
+    const token = await parentToken();
+    const response = await handleApi(
+      request("/parent/export.csv", {}, familyKey, token),
+      env
+    );
+    const csv = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(csv).toContain("\"'=SUM(A1:A2)\"");
+    expect(csv).toContain("\"'@IMPORTXML(\"\"https://example.test\"\")\"");
   });
 
   it("金額0円の達成も支払い済みにできる", async () => {

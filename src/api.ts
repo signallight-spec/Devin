@@ -65,7 +65,6 @@ interface InitialSetupInput {
   pin: string;
   goalMinutes: number;
   baseAmountYen: number;
-  bonusIntervalDays: number;
   bonusAmountYen: number;
 }
 
@@ -229,7 +228,6 @@ export const api = {
   },
   createRule(input: {
     baseAmountYen: number;
-    bonusIntervalDays: number;
     bonusAmountYen: number;
   }) {
     return apiRequest<AllowanceRule>(

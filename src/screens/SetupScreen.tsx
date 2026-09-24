@@ -58,7 +58,6 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
         pin,
         goalMinutes: 25,
         baseAmountYen: 100,
-        bonusIntervalDays: 7,
         bonusAmountYen: 300
       });
       setFamilyKey(result.familyKey);

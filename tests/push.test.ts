@@ -18,9 +18,34 @@ vi.mock("../src/api", () => ({
 }));
 
 import {
+  disablePushNotifications,
   disconnectPushBeforeFamilyKeyRemoval,
   enablePushNotifications
 } from "../src/push";
+
+function memoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear() {
+      values.clear();
+    },
+    getItem(key) {
+      return values.get(key) ?? null;
+    },
+    key(index) {
+      return [...values.keys()][index] ?? null;
+    },
+    removeItem(key) {
+      values.delete(key);
+    },
+    setItem(key, value) {
+      values.set(key, value);
+    }
+  };
+}
 
 function pushSubscription(): PushSubscription {
   return {
@@ -65,6 +90,7 @@ beforeEach(() => {
     Notification: notification,
     PushManager: pushManager
   });
+  vi.stubGlobal("localStorage", memoryStorage());
   vi.stubGlobal("atob", (value: string) => Buffer.from(value, "base64").toString("binary"));
 });
 
@@ -114,7 +140,32 @@ describe("Push通知", () => {
     expect(apiMocks.savePushSubscription).not.toHaveBeenCalled();
   });
 
-  it("家族キー削除前の通知解除に失敗した場合は購読を保持して再試行できる", async () => {
+  it("通常の通知解除ではブラウザ購読を先に無効化する", async () => {
+    const subscription = pushSubscription();
+    vi.mocked(subscription.unsubscribe).mockResolvedValue(true);
+    const registered = registration(subscription, {} as ServiceWorker);
+    vi.mocked(registered.pushManager.getSubscription).mockResolvedValue(
+      subscription
+    );
+    vi.stubGlobal("navigator", {
+      serviceWorker: {
+        getRegistration: vi.fn().mockResolvedValue(registered),
+        register: vi.fn(),
+        ready: Promise.resolve(registered)
+      }
+    });
+    apiMocks.deletePushSubscription.mockRejectedValueOnce(
+      new TypeError("network failure")
+    );
+
+    await expect(disablePushNotifications()).rejects.toThrow("network failure");
+    expect(subscription.unsubscribe).toHaveBeenCalledOnce();
+    expect(
+      vi.mocked(subscription.unsubscribe).mock.invocationCallOrder[0]
+    ).toBeLessThan(apiMocks.deletePushSubscription.mock.invocationCallOrder[0]);
+  });
+
+  it("家族キー削除時のサーバー解除失敗を同じ通知先で再試行する", async () => {
     const subscription = pushSubscription();
     vi.mocked(subscription.unsubscribe).mockResolvedValue(true);
     const registered = registration(subscription, {} as ServiceWorker);
@@ -134,9 +185,10 @@ describe("Push通知", () => {
     await expect(disconnectPushBeforeFamilyKeyRemoval()).rejects.toThrow(
       "network failure"
     );
-    expect(subscription.unsubscribe).not.toHaveBeenCalled();
+    expect(subscription.unsubscribe).toHaveBeenCalledOnce();
     await expect(disconnectPushBeforeFamilyKeyRemoval()).resolves.toBeUndefined();
     expect(apiMocks.deletePushSubscription).toHaveBeenCalledTimes(2);
     expect(subscription.unsubscribe).toHaveBeenCalledOnce();
+    expect(localStorage.length).toBe(0);
   });
 });
