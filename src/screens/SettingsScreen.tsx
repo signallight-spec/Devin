@@ -159,7 +159,7 @@ export function SettingsScreen({
         ) : (
           <button
             className={subscribed ? "secondary-button" : "primary-button"}
-            disabled={pushBusy || !notification.available}
+            disabled={pushBusy || (!subscribed && !notification.available)}
             onClick={togglePush}
             type="button"
           >
