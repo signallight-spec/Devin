@@ -272,6 +272,45 @@ describe("APIハンドラー", () => {
     expect(rejected.status).toBe(400);
   });
 
+  it("Chromeのjmt Push購読はFCMパスだけ登録する", async () => {
+    const input = {
+      endpoint: "https://jmt17.google.com/fcm/send/subscription-id",
+      p256dh: "client-public-key",
+      auth: "auth-secret"
+    };
+    const created = await handleApi(
+      request(
+        "/push/subscriptions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input)
+        },
+        familyKey
+      ),
+      env
+    );
+    expect(created.status).toBe(204);
+
+    for (const endpoint of [
+      "https://jmt17.google.com/not-fcm/subscription-id",
+      "https://anything.google.com/fcm/send/subscription-id"
+    ]) {
+      const rejected = await handleRequest(
+        request(
+          "/push/subscriptions",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...input, endpoint })
+          },
+          familyKey
+        )
+      );
+      expect(rejected.status).toBe(400);
+    }
+  });
+
   it("家族キー再発行は確認まで旧キーと新キーの両方を受け付ける", async () => {
     const token = await parentToken();
     const newFamilyKey = "B".repeat(43);

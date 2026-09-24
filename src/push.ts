@@ -1,5 +1,9 @@
 import { api } from "./api";
 
+const SERVICE_WORKER_TIMEOUT_MS = 15_000;
+const SERVICE_WORKER_TIMEOUT_MESSAGE =
+  "通知の準備が完了しませんでした。ページを再読み込みして、もう一度お試しください。";
+
 function applicationServerKey(value: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - value.length % 4) % 4);
   const decoded = atob((value + padding).replace(/-/g, "+").replace(/_/g, "/"));
@@ -35,11 +39,37 @@ export function pushSupported(): boolean {
   );
 }
 
+async function pushRegistration(): Promise<ServiceWorkerRegistration> {
+  const serviceWorker = navigator.serviceWorker;
+  const registrationPromise = (async () => {
+    const existing = await serviceWorker.getRegistration("/");
+    const registration = existing ?? await serviceWorker.register("/sw.js");
+    if (registration.active) {
+      return registration;
+    }
+    return serviceWorker.ready;
+  })();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error(SERVICE_WORKER_TIMEOUT_MESSAGE)),
+      SERVICE_WORKER_TIMEOUT_MS
+    );
+  });
+  try {
+    return await Promise.race([registrationPromise, timeout]);
+  } finally {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 export async function currentPushSubscription(): Promise<PushSubscription | null> {
   if (!pushSupported()) {
     return null;
   }
-  const registration = await navigator.serviceWorker.ready;
+  const registration = await pushRegistration();
   return registration.pushManager.getSubscription();
 }
 
@@ -59,7 +89,7 @@ export async function enablePushNotifications(
   if (permission !== "granted") {
     throw new Error("Androidの設定で通知を許可してください。");
   }
-  const registration = await navigator.serviceWorker.ready;
+  const registration = await pushRegistration();
   const existing = await registration.pushManager.getSubscription();
   const subscription = existing ?? await registration.pushManager.subscribe({
     userVisibleOnly: true,

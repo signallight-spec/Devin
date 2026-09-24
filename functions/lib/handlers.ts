@@ -71,6 +71,7 @@ const PUSH_SERVICE_HOSTS = new Set([
   "updates.push.services.mozilla.com",
   "web.push.apple.com"
 ]);
+const CHROME_PUSH_SERVICE_HOST_PATTERN = /^jmt\d+\.google\.com$/;
 
 function randomCharacterSeed(): number {
   const values = new Uint32Array(1);
@@ -296,7 +297,11 @@ function subscriptionValues(body: Record<string, unknown>): {
   }
   if (
     parsedEndpoint.protocol !== "https:" ||
-    !PUSH_SERVICE_HOSTS.has(parsedEndpoint.hostname) ||
+    (!PUSH_SERVICE_HOSTS.has(parsedEndpoint.hostname) &&
+      !(
+        CHROME_PUSH_SERVICE_HOST_PATTERN.test(parsedEndpoint.hostname) &&
+        parsedEndpoint.pathname.startsWith("/fcm/send/")
+      )) ||
     endpoint.length > 2048 ||
     p256dh.length > 512 ||
     auth.length > 512

@@ -20,6 +20,8 @@ export function SettingsScreen({ onFamilyKeyReset }: { onFamilyKeyReset: () => v
   const [subscribed, setSubscribed] = useState(false);
   const [message, setMessage] = useState("");
   const [tone, setTone] = useState<"error" | "success">("success");
+  const [pushMessage, setPushMessage] = useState("");
+  const [pushTone, setPushTone] = useState<"error" | "success">("success");
   const [busy, setBusy] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
 
@@ -28,10 +30,17 @@ export function SettingsScreen({ onFamilyKeyReset }: { onFamilyKeyReset: () => v
       .then(async (today) => {
         setGoalMinutes(today.goalMinutes);
         setNotification(today.notification);
-        const subscription = await currentPushSubscription();
-        setSubscribed(Boolean(subscription));
-        if (subscription) {
-          await syncPushSubscription(subscription);
+        try {
+          const subscription = await currentPushSubscription();
+          setSubscribed(Boolean(subscription));
+          if (subscription) {
+            await syncPushSubscription(subscription);
+          }
+        } catch (error) {
+          setPushTone("error");
+          setPushMessage(
+            error instanceof Error ? error.message : "通知設定の読み込みに失敗しました。"
+          );
         }
       })
       .catch((error: unknown) => {
@@ -57,25 +66,27 @@ export function SettingsScreen({ onFamilyKeyReset }: { onFamilyKeyReset: () => v
 
   const togglePush = async () => {
     setPushBusy(true);
-    setMessage("");
+    setPushMessage("");
     try {
       if (subscribed) {
         await disablePushNotifications();
         setSubscribed(false);
-        setTone("success");
-        setMessage("この端末の通知を解除しました。");
+        setPushTone("success");
+        setPushMessage("この端末の通知を解除しました。");
       } else {
         if (!notification.publicKey) {
           throw new Error("通知用の設定がまだ完了していません。");
         }
         await enablePushNotifications(notification.publicKey);
         setSubscribed(true);
-        setTone("success");
-        setMessage("このAndroid端末で通知を受け取ります。");
+        setPushTone("success");
+        setPushMessage("このAndroid端末で通知を受け取ります。");
       }
     } catch (error) {
-      setTone("error");
-      setMessage(error instanceof Error ? error.message : "通知設定に失敗しました。");
+      setPushTone("error");
+      setPushMessage(
+        error instanceof Error ? error.message : "通知設定に失敗しました。"
+      );
     } finally {
       setPushBusy(false);
     }
@@ -135,6 +146,7 @@ export function SettingsScreen({ onFamilyKeyReset }: { onFamilyKeyReset: () => v
                 : "この端末で通知を受け取る"}
           </button>
         )}
+        <StatusMessage message={pushMessage} tone={pushTone} />
         <p className="quiet-note">
           Chromeからホーム画面へ追加し、Androidの通知許可をONにしてください。
         </p>
