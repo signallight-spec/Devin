@@ -237,8 +237,11 @@ def main():
             det_src = "a" if det else None
         ext = det or (last_ext[0] if last_ext else None)
         # x-extent coords live in the frame they were detected on; remember
-        # which frame ('b'/'a') so classify can map them into diff coords
-        ext_src = det_src if det else (last_ext[1] if last_ext else None)
+        # which frame ('b'/'a') so classify can map them into diff coords.
+        # An inherited extent is only an estimate of the current row's spot —
+        # its old 'a'/'b' label belongs to a different event's alignment, so
+        # treat it as measured on this event's before frame instead
+        ext_src = det_src if det else "b"
         if ext:
             last_ext = (ext, ext_src)
         dimg, sh = align_diff(bb, aa)
