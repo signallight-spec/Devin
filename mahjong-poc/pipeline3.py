@@ -102,10 +102,12 @@ def align_diff(bb, aa):
 
 def main():
     import os as _os
+    _st = _os.stat(VIDEO)
+    ident = {"video": VIDEO, "size": _st.st_size, "mtime": _st.st_mtime_ns}
     meta = None
     if _os.path.exists("log3.meta.json") and _os.path.exists("log3.json"):
         meta = json.load(open("log3.meta.json"))
-    cached = meta is not None and meta.get("video") == VIDEO
+    cached = meta is not None and all(meta.get(k) == v for k, v in ident.items())
     if cached:
         log = json.load(open("log3.json"))
         src_fps = meta["src_fps"]
@@ -129,7 +131,7 @@ def main():
                         "skin_pond": float(sm[R_POND[1]:R_POND[3], R_POND[0]:R_POND[2]].mean())})
         cap.release()
         json.dump(log, open("log3.json", "w"))
-        json.dump({"video": VIDEO, "src_fps": src_fps}, open("log3.meta.json", "w"))
+        json.dump({**ident, "src_fps": src_fps}, open("log3.meta.json", "w"))
     ts = [e["t"] for e in log]
 
     # episodes of hand in pond
