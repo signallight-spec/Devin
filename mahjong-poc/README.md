@@ -30,6 +30,9 @@
 依存: `pip install opencv-python numpy`。検証動画はリポジトリに含まないため、
 同じ結果を再現するには該当動画を `videos/sample1_x264.mp4` として配置してから実行する。
 
+探索スクリプトの追加依存: `mp_test.py` は `pip install mediapipe` が必要で、
+初回実行時に `hand_landmarker.task` モデル（約7MB）をスクリプトと同じディレクトリにダウンロードする。
+
 ```bash
 python3 pipeline3.py <video.mp4>   # log3.json, log3.meta.json, events.json, events3/*.png を生成
 python3 annotate.py <video.mp4>    # annotated.mp4 を生成（log3.meta.json が動画と一致しない場合は中断）

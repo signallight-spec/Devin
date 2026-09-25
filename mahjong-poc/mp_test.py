@@ -7,7 +7,7 @@ from mediapipe.tasks.python import vision
 from mediapipe.tasks.python.core import base_options
 import urllib.request, os
 
-MODEL = "/home/ubuntu/mahjong-poc/hand_landmarker.task"
+MODEL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hand_landmarker.task")
 if not os.path.exists(MODEL):
     urllib.request.urlretrieve(
         "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
