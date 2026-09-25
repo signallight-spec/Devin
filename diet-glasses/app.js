@@ -217,8 +217,15 @@ function captureFrame() {
   const src = mode === 'camera' ? cam : demoImg;
   const w = src.videoWidth || src.naturalWidth, h = src.videoHeight || src.naturalHeight;
   if (!w || !h) return null;
+  // Classify only what object-fit:cover actually shows: the centered source
+  // rect matching the stage's aspect ratio.
+  const stage = src.getBoundingClientRect();
+  const stageAspect = stage.width && stage.height ? stage.width / stage.height : w / h;
+  let cw = w, ch = h;
+  if (w / h > stageAspect) cw = Math.max(1, Math.round(h * stageAspect));
+  else ch = Math.max(1, Math.round(w / stageAspect));
   cap.width = cap.height = 384;
-  capCtx.drawImage(src, 0, 0, w, h, 0, 0, 384, 384);
+  capCtx.drawImage(src, (w - cw) / 2, (h - ch) / 2, cw, ch, 0, 0, 384, 384);
   return cap.toDataURL('image/jpeg', 0.85);
 }
 
