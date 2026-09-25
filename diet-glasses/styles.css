@@ -62,6 +62,8 @@ body {
   max-width: calc(100vw - 32px);
 }
 
+#hud-food[hidden] { display: none; }
+
 #foodName { font-size: 17px; font-weight: 700; }
 #foodKcal { color: #ffd166; font-weight: 600; margin-left: 8px; }
 #foodConf { color: #9ad; font-size: 12px; margin-left: 8px; }

@@ -192,7 +192,7 @@ function renderBan() {
   const food = over && currentFood;
   stamp.hidden = !food;
   if (food) stampFood.textContent = `${currentFood.name} +${currentFood.kcal} kcal`;
-  vignette.classList.toggle('ban', over);
+  vignette.classList.toggle('ban', !!food);
   warnBanner.hidden = !(dayTotal() >= limit * 0.8);
   if (over) {
     warnBanner.textContent = '本日の摂取カロリー上限を超過しました';
@@ -217,16 +217,22 @@ function captureFrame() {
   const src = mode === 'camera' ? cam : demoImg;
   const w = src.videoWidth || src.naturalWidth, h = src.videoHeight || src.naturalHeight;
   if (!w || !h) return null;
-  const side = Math.min(w, h);
   cap.width = cap.height = 384;
-  capCtx.drawImage(src, (w - side) / 2, (h - side) / 2, side, side, 0, 0, 384, 384);
+  capCtx.drawImage(src, 0, 0, w, h, 0, 0, 384, 384);
   return cap.toDataURL('image/jpeg', 0.85);
 }
 
 // ---------- classification loop ----------
 
+let shownDay = todayKey();
+
 async function scan() {
   if (busy || !classifier) return;
+  if (shownDay !== todayKey()) {
+    shownDay = todayKey();
+    renderLog();
+    renderTotals();
+  }
   const frame = captureFrame();
   if (!frame) return;
   busy = true;
