@@ -7,7 +7,8 @@ Method:
        no change          -> TSUMOGIRI (tile went straight from draw to pond)
        interior loss      -> TEDASHI
        right-end loss     -> TSUMOGIRI (drawn tile conventionally at right end)
-Outputs: events.json, annotated video, before/after contact images.
+Outputs: events.json and before/after contact images in events3/;
+annotate.py renders the visualization video.
 """
 import cv2
 import numpy as np
@@ -158,13 +159,23 @@ def main():
         return max(cands) if cands else 0
 
     events = []
-    for a, b in merged:
+    for mi, (a, b) in enumerate(merged):
         if b - a > 8:  # deal/transition phase, skip
             continue
         pre = max(area_near(a - 3), area_near(a - 2), area_near(a - 1))
         post = max(area_near(b + 1), area_near(b + 2), area_near(b + 3))
-        if post - pre > MIN_DELTA:
-            events.append({"t": (a + b) / 2, "t0": a, "t1": b, "delta": post - pre})
+        # growth attributable to this episode alone ends where the next
+        # hand-in-pond episode begins; growth seen only after that is
+        # ambiguous (it may belong to the later discard)
+        nxt = merged[mi + 1][0] if mi + 1 < len(merged) else b + 4
+        own = max(area_near(t) for t in
+                  np.arange(b + 0.5, min(b + 3, nxt) + 0.01, 0.5))
+        if own - pre > MIN_DELTA:
+            events.append({"t": (a + b) / 2, "t0": a, "t1": b,
+                           "delta": own - pre, "sure": True})
+        elif post - pre > MIN_DELTA:
+            events.append({"t": (a + b) / 2, "t0": a, "t1": b,
+                           "delta": post - pre, "sure": False})
     print(f"{len(events)} discard events")
 
     # pass 2: classify each event via band diff
@@ -182,9 +193,19 @@ def main():
         # fall back to least-occluded frame in the window
         return [min(cand, key=lambda e: e["skin_hand"])["t"]] if cand else []
 
+    # the row's bounds reset at every deal/transition (long skin episode):
+    # an extent inherited across that boundary belongs to the previous round
+    sweep_ends = [b for a, b in merged if b - a > 8]
+    for ev in events:
+        ev["round"] = bisect.bisect_right(sweep_ends, ev["t0"])
+
     results = []
     last_ext = None
+    cur_round = -1
     for i, ev in enumerate(events):
+        if ev["round"] != cur_round:
+            cur_round = ev["round"]
+            last_ext = None
         mid = ev["t"]
         befs = clean(mid - 5, ev["t0"] - 0.1)
         afts = clean(ev["t1"] + 0.4, mid + 5)
@@ -245,9 +266,10 @@ def main():
             return "uncertain", None
         ext, src = r["ext"], r.get("ext_src")
         if ext is None and known:
-            # nearest detected extent in event order
+            # nearest detected extent in event order, same round only
             j = results.index(r)
-            cand = [(abs(k - j), (e["ext"], e["ext_src"])) for k, e in enumerate(results) if e.get("ext")]
+            cand = [(abs(k - j), (e["ext"], e["ext_src"])) for k, e in enumerate(results)
+                    if e.get("ext") and e.get("round") == r.get("round")]
             ext, src = min(cand, key=lambda c: c[0])[1] if cand else (None, None)
         if not r["runs"]:
             # an empty diff is tsumogiri only when this event actually saw the
@@ -290,6 +312,11 @@ def main():
         fname = f"events3/ev{i:02d}_t{mid:.0f}_{label}_b{r['tb']:.0f}_a{r['ta']:.0f}.png"
         cv2.imwrite(fname, np.vstack([r.pop("bb"), r.pop("aa")]))
         r["img"] = fname
+    # an ambiguous event (growth only seen once the next episode started)
+    # survives only when the hand-band diff proved an interior tile loss —
+    # otherwise the growth most likely belongs to the later discard
+    results = [r for r in results
+               if r.get("sure", True) or r["label"] == "tedashi"]
     json.dump(results, open("events.json", "w"), indent=1)
     for r in results:
         print(f"  t={r['t']:6.1f}  {r['label']:10s} runs={r.get('runs')} img={r.get('img','-')}")

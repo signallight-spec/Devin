@@ -3,7 +3,7 @@
 Cell fill order = discard order. Red = tedashi, cyan = tsumogiri."""
 import cv2
 import numpy as np
-import json, sys
+import json, os, sys
 
 VIDEO = sys.argv[1] if len(sys.argv) > 1 else "videos/sample1_x264.mp4"
 OUT = "annotated.mp4"
@@ -45,6 +45,12 @@ def draw_table(img, cells, ox, oy, title):
 
 
 def main():
+    # refuse to overlay results generated for a different video
+    meta = json.load(open("log3.meta.json")) if os.path.exists("log3.meta.json") else None
+    st = os.stat(VIDEO)
+    if not (meta and meta.get("video") == VIDEO and meta.get("size") == st.st_size
+            and meta.get("mtime") == st.st_mtime_ns):
+        sys.exit(f"results were generated for another video; run pipeline3.py on {VIDEO} first")
     events = json.load(open("events.json"))
     marks = []  # (t_shown, label) — table cells fill in discard order
     for i, ev in enumerate(events):
@@ -69,7 +75,9 @@ def main():
     for a, b in eps:
         if merged and a - merged[-1][1] < 1.5: merged[-1][1] = b
         else: merged.append([a, b])
-    SWEEPS = [m for m in merged if m[1] - m[0] > 6]
+    # same transition gate as pipeline3 (>8s), else a 6-8s episode could be
+    # emitted as an event yet cleared here as a transition
+    SWEEPS = [m for m in merged if m[1] - m[0] > 8]
     print("sweep intervals:", [[round(a, 1), round(b, 1)] for a, b in SWEEPS])
 
     cap = cv2.VideoCapture(VIDEO)
