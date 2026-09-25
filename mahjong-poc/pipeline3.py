@@ -181,6 +181,8 @@ def main():
     # pass 2: classify each event via band diff
     cap = cv2.VideoCapture(VIDEO)
     os.makedirs("events3", exist_ok=True)
+    for _f in os.listdir("events3"):  # drop stale evidence from earlier runs
+        os.remove(os.path.join("events3", _f))
     def frame(t):
         cap.set(cv2.CAP_PROP_POS_FRAMES, int(round(t * src_fps)))
         ok, im = cap.read()
@@ -248,9 +250,14 @@ def main():
         runs = [r for r in runs if r[1] - r[0] >= 25]
         W = bb.shape[1]
         full = any(r[0] < W * 0.05 and r[1] > W * 0.95 for r in runs)
-        # fraction of the band strip occluded by skin — when large, an empty
-        # diff is unobservable rather than evidence for tsumogiri
-        region = sk[sy0:sy1, :]
+        # fraction of the ROW occluded by skin — an empty diff is evidence
+        # for tsumogiri only where the row itself was visible. Measure it
+        # over the extent's columns (mapped into diff coords), not the
+        # whole 1070px band, else a small covered row looks observable
+        adj = (-sh if (ext_src == "a" and sh > 0) else (sh if sh < 0 else 0))
+        cx0 = int(max(0, min(sk.shape[1], ext[0] + adj))) if ext else 0
+        cx1 = int(max(0, min(sk.shape[1], ext[1] + adj))) if ext else sk.shape[1]
+        region = sk[sy0:sy1, cx0:cx1] if cx1 > cx0 else sk[sy0:sy1, :]
         skfrac = float(region.mean()) if region.size else 0.0
         results.append({**ev, "tb": tb, "ta": ta,
                         "runs": runs, "shift": sh, "ext": ext,

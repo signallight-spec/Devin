@@ -40,7 +40,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 0.0031926065952530983,
+  "skfrac": 0.0,
   "fname": null,
   "label": "tedashi",
   "ext_used": [
@@ -76,7 +76,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 0.00328141225337487,
+  "skfrac": 0.013877909530083443,
   "fname": null,
   "label": "tsumogiri?",
   "ext_used": [
@@ -112,7 +112,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 0.014143302180685359,
+  "skfrac": 0.013594771241830065,
   "fname": null,
   "label": "tsumogiri?",
   "ext_used": [
@@ -143,7 +143,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 0.00024922118380062304,
+  "skfrac": 0.00034100596760443307,
   "fname": null,
   "label": "tsumogiri",
   "ext_used": [
@@ -183,7 +183,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 0.0003322949117341641,
+  "skfrac": 0.0002838087129274869,
   "fname": null,
   "label": "tedashi",
   "ext_used": [
@@ -281,7 +281,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 0.00031152647975077883,
+  "skfrac": 0.00043346337234503684,
   "fname": null,
   "label": "tsumogiri",
   "ext_used": [
@@ -312,7 +312,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 8.307372793354102e-05,
+  "skfrac": 0.00011559023262534317,
   "fname": null,
   "label": "tsumogiri",
   "ext_used": [
@@ -348,7 +348,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 0.055514018691588785,
+  "skfrac": 0.034704491725768324,
   "fname": null,
   "label": "tsumogiri",
   "ext_used": [
@@ -379,7 +379,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 0.031630321910695744,
+  "skfrac": 0.031212121212121212,
   "fname": null,
   "label": "tsumogiri",
   "ext_used": [
@@ -423,7 +423,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 0.15574247144340603,
+  "skfrac": 0.05646464646464647,
   "fname": null,
   "label": "tedashi",
   "ext_used": [
@@ -463,7 +463,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 0.0931048805815161,
+  "skfrac": 0.042922374429223746,
   "fname": null,
   "label": "tedashi",
   "ext_used": [
@@ -499,7 +499,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 0.14990654205607476,
+  "skfrac": 0.056504065040650406,
   "fname": null,
   "label": "tsumogiri",
   "ext_used": [
@@ -547,7 +547,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 0.16074766355140188,
+  "skfrac": 0.06080436264485344,
   "fname": null,
   "label": "tedashi",
   "ext_used": [
@@ -583,7 +583,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 0.11468328141225337,
+  "skfrac": 0.06802030456852792,
   "fname": null,
   "label": "tsumogiri",
   "ext_used": [
@@ -619,7 +619,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 0.00529595015576324,
+  "skfrac": 0.002239448751076658,
   "fname": null,
   "label": "tedashi",
   "ext_used": [
@@ -650,7 +650,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 0.07673935617860851,
+  "skfrac": 0.0033528265107212476,
   "fname": null,
   "label": "tsumogiri",
   "ext_used": [
@@ -681,7 +681,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 0.01588785046728972,
+  "skfrac": 0.022414068745003998,
   "fname": null,
   "label": "tsumogiri",
   "ext_used": [
@@ -733,7 +733,7 @@
   "det": true,
   "ext_src": "b",
   "full": false,
-  "skfrac": 0.02706766917293233,
+  "skfrac": 0.035099157837544144,
   "fname": null,
   "label": "tedashi",
   "ext_used": [
