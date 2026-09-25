@@ -77,7 +77,10 @@ let currentFood = null;         // {prompt,name,kcal,score}
 let lastLabel = null, streak = 0;
 const loggedAt = new Map();     // prompt -> epoch ms
 
-const todayKey = () => `dg_log_${new Date().toISOString().slice(0, 10)}`;
+const todayKey = () => {
+  const d = new Date();
+  return `dg_log_${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 let limit = parseInt(localStorage.getItem('dg_limit') || '2000', 10);
 let autoLog = localStorage.getItem('dg_autolog') !== '0';
 limitInput.value = limit;
@@ -116,7 +119,11 @@ function renderLog() {
   entries.forEach((e, i) => {
     const li = document.createElement('li');
     const time = new Date(e.t).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-    li.innerHTML = `<span>${time} ${e.name}</span><span>${e.kcal} kcal</span>`;
+    const label = document.createElement('span');
+    label.textContent = `${time} ${e.name}`;
+    const kcal = document.createElement('span');
+    kcal.textContent = `${e.kcal} kcal`;
+    li.append(label, kcal);
     const del = document.createElement('button');
     del.className = 'del'; del.textContent = '✕'; del.title = '削除';
     del.onclick = () => { const l = loadLog(); l.splice(i, 1); saveLog(l); renderLog(); renderTotals(); };
@@ -210,13 +217,18 @@ function handleResult(top) {
 
 // ---------- sources ----------
 
+let cameraPending = false;
 async function startCamera() {
+  if (cameraPending) return;
+  cameraPending = true;
   stopDemo();
   try {
-    cam.srcObject = await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'environment', width: { ideal: 1280 } },
       audio: false,
     });
+    if (cam.srcObject) cam.srcObject.getTracks().forEach(t => t.stop());
+    cam.srcObject = stream;
     await cam.play();
     cam.hidden = false; demoImg.hidden = true;
     mode = 'camera';
@@ -225,6 +237,8 @@ async function startCamera() {
     console.warn('camera unavailable:', e);
     showToast('カメラが使えません → デモモードで動作します', 3500);
     startDemo();
+  } finally {
+    cameraPending = false;
   }
 }
 
@@ -244,7 +258,13 @@ function stopDemo() { clearInterval(demoTimer); demoTimer = null; }
 
 el('srcBtn').onclick = () => (mode === 'camera' ? startDemo() : startCamera());
 el('panelBtn').onclick = () => { panel.hidden = !panel.hidden; renderLog(); };
-logBtn.onclick = () => currentFood && addLog(currentFood, 'manual');
+el('panelClose').onclick = () => { panel.hidden = true; };
+logBtn.onclick = () => {
+  if (!currentFood) return;
+  loggedAt.set(currentFood.prompt, Date.now());
+  streak = 0;
+  addLog(currentFood, 'manual');
+};
 limitInput.onchange = () => {
   limit = Math.max(100, parseInt(limitInput.value, 10) || 2000);
   localStorage.setItem('dg_limit', limit);

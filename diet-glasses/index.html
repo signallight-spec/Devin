@@ -49,7 +49,10 @@
     </footer>
 
     <aside id="panel" hidden>
-      <h2>設定・ログ</h2>
+      <div class="panel-head">
+        <h2>設定・ログ</h2>
+        <button id="panelClose" title="閉じる">✕</button>
+      </div>
       <label class="row">
         1日の上限 (kcal)
         <input id="limitInput" type="number" min="100" step="50" value="2000">
