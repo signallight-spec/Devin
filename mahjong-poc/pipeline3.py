@@ -21,17 +21,19 @@ R_HAND = (170, 545, 1240, 660)   # band incl. standing row (top ~45px) + melds b
 ROW_STRIP = 35                    # top rows of band = standing hand; meld changes ignored
 MIN_DELTA = 900                  # pond growth px for one tile
 EP_GAP = 1.5
+SKIN = (2, 24, 45, 165, 110)     # h_lo, h_hi, s_lo, s_hi, v_lo for skin_mask
+POND_T = (150, 70)               # v_min, s_max for pond_area white tiles
 
 def skin_mask(img):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     h, s, v = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
-    return (h >= 2) & (h <= 24) & (s >= 45) & (s <= 165) & (v >= 110)
+    return (h >= SKIN[0]) & (h <= SKIN[1]) & (s >= SKIN[2]) & (s <= SKIN[3]) & (v >= SKIN[4])
 
 def pond_area(img):
     x0, y0, x1, y1 = R_POND
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     h, s, v = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
-    m = (v > 150) & (s < 70)
+    m = (v > POND_T[0]) & (s < POND_T[1])
     return int(m[y0:y1, x0:x1].sum())
 
 def band(img):
@@ -104,10 +106,10 @@ def align_diff(bb, aa):
 def main():
     import os as _os
     _st = _os.stat(VIDEO)
-    # cache identity: the video content AND the measurement settings the
-    # feature log was sampled under
+    # cache identity covers every input that changes the feature log: the
+    # video, the sampled regions/rate, and the detector thresholds
     ident = {"video": VIDEO, "size": _st.st_size, "mtime": _st.st_mtime_ns,
-             "cfg": f"{R_POND}|{R_HAND}|{FPS}"}
+             "cfg": f"{R_POND}|{R_HAND}|{FPS}|skin={SKIN}|pond={POND_T}"}
     meta = None
     if _os.path.exists("log3.meta.json") and _os.path.exists("log3.json"):
         meta = json.load(open("log3.meta.json"))
@@ -166,10 +168,11 @@ def main():
         post = max(area_near(b + 1), area_near(b + 2), area_near(b + 3))
         # growth attributable to this episode alone ends where the next
         # hand-in-pond episode begins; growth seen only after that is
-        # ambiguous (it may belong to the later discard)
+        # ambiguous (it may belong to the later discard). Sample the log
+        # directly here — area_near's lookahead could read past nxt
         nxt = merged[mi + 1][0] if mi + 1 < len(merged) else b + 4
-        own = max(area_near(t) for t in
-                  np.arange(b + 0.5, min(b + 3, nxt) + 0.01, 0.5))
+        own = max((e["pond"] for e in log if b + 0.4 <= e["t"] < nxt
+                   and e["t"] <= b + 3), default=0)
         if own - pre > MIN_DELTA:
             events.append({"t": (a + b) / 2, "t0": a, "t1": b,
                            "delta": own - pre, "sure": True})
@@ -183,6 +186,10 @@ def main():
     os.makedirs("events3", exist_ok=True)
     for _f in os.listdir("events3"):  # drop stale evidence from earlier runs
         os.remove(os.path.join("events3", _f))
+    # clear stale labels up front: if this run is interrupted mid-classify,
+    # annotate must not pair them with freshly-written log metadata
+    if _os.path.exists("events.json"):
+        _os.remove("events.json")
     def frame(t):
         cap.set(cv2.CAP_PROP_POS_FRAMES, int(round(t * src_fps)))
         ok, im = cap.read()
@@ -209,8 +216,15 @@ def main():
             cur_round = ev["round"]
             last_ext = None
         mid = ev["t"]
-        befs = clean(mid - 5, ev["t0"] - 0.1)
-        afts = clean(ev["t1"] + 0.4, mid + 5)
+        # compare frames inside this event's neighbourhood only: an
+        # after-frame past the NEXT discard would diff in that discard's row
+        # change; a before-frame before the PREVIOUS discard's placement
+        # likewise. Other players' pond episodes don't touch the hand band,
+        # so the bound is the neighbouring event, not the neighbouring episode
+        prev_ev_t1 = events[i - 1]["t1"] if i > 0 else 0
+        next_ev_t0 = events[i + 1]["t0"] if i + 1 < len(events) else mid + 5
+        befs = clean(max(mid - 5, prev_ev_t1 + 0.5), ev["t0"] - 0.1)
+        afts = clean(ev["t1"] + 0.4, min(mid + 5, next_ev_t0))
         if not befs or not afts:
             results.append({**ev, "label": "noisy"}); continue
         tb, ta = befs[-1], afts[0]

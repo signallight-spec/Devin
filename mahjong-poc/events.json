@@ -124,37 +124,6 @@
   "img": "events3/ev02_t38_tsumogiri?_b38_a38.png"
  },
  {
-  "t": 206.8,
-  "t0": 206.8,
-  "t1": 206.8,
-  "delta": 923,
-  "sure": true,
-  "round": 1,
-  "tb": 206.66666666666666,
-  "ta": 207.33333333333334,
-  "runs": [],
-  "shift": 0,
-  "ext": [
-   252,
-   1034,
-   39,
-   84
-  ],
-  "det": true,
-  "ext_src": "b",
-  "full": false,
-  "skfrac": 0.00034100596760443307,
-  "fname": null,
-  "label": "tsumogiri",
-  "ext_used": [
-   252,
-   1034,
-   39,
-   84
-  ],
-  "img": "events3/ev03_t207_tsumogiri_b207_a207.png"
- },
- {
   "t": 210.53333333333333,
   "t0": 209.73333333333332,
   "t1": 211.33333333333334,
@@ -192,13 +161,13 @@
    39,
    84
   ],
-  "img": "events3/ev04_t211_tedashi_b210_a212.png"
+  "img": "events3/ev03_t211_tedashi_b210_a212.png"
  },
  {
   "t": 220.8,
   "t0": 220.8,
   "t1": 220.8,
-  "delta": 1440,
+  "delta": 1038,
   "sure": true,
   "round": 1,
   "tb": 220.66666666666666,
@@ -223,7 +192,7 @@
    40,
    85
   ],
-  "img": "events3/ev05_t221_tsumogiri_b221_a221.png"
+  "img": "events3/ev04_t221_tsumogiri_b221_a221.png"
  },
  {
   "t": 225.2,
@@ -259,7 +228,7 @@
    40,
    85
   ],
-  "img": "events3/ev07_t225_tsumogiri_b225_a226.png"
+  "img": "events3/ev06_t225_tsumogiri_b225_a226.png"
  },
  {
   "t": 248.06666666666666,
@@ -290,7 +259,7 @@
    39,
    84
   ],
-  "img": "events3/ev09_t248_tsumogiri_b248_a249.png"
+  "img": "events3/ev08_t248_tsumogiri_b248_a249.png"
  },
  {
   "t": 261.0,
@@ -321,13 +290,13 @@
    39,
    84
   ],
-  "img": "events3/ev10_t261_tsumogiri_b261_a262.png"
+  "img": "events3/ev09_t261_tsumogiri_b261_a262.png"
  },
  {
   "t": 290.5333333333333,
   "t0": 290.26666666666665,
   "t1": 290.8,
-  "delta": 1450,
+  "delta": 1164,
   "sure": true,
   "round": 1,
   "tb": 290.1333333333333,
@@ -357,7 +326,7 @@
    50,
    95
   ],
-  "img": "events3/ev11_t291_tsumogiri_b290_a291.png"
+  "img": "events3/ev10_t291_tsumogiri_b290_a291.png"
  },
  {
   "t": 307.8666666666667,
@@ -388,7 +357,7 @@
    0,
    45
   ],
-  "img": "events3/ev12_t308_tsumogiri_b307_a309.png"
+  "img": "events3/ev11_t308_tsumogiri_b307_a309.png"
  },
  {
   "t": 326.66666666666663,
@@ -432,7 +401,7 @@
    0,
    45
   ],
-  "img": "events3/ev13_t327_tedashi_b326_a328.png"
+  "img": "events3/ev12_t327_tedashi_b326_a328.png"
  },
  {
   "t": 347.3333333333333,
@@ -472,7 +441,7 @@
    1,
    46
   ],
-  "img": "events3/ev14_t347_tedashi_b345_a350.png"
+  "img": "events3/ev13_t347_tedashi_b345_a350.png"
  },
  {
   "t": 401.0,
@@ -508,7 +477,7 @@
    0,
    45
   ],
-  "img": "events3/ev15_t401_tsumogiri_b401_a402.png"
+  "img": "events3/ev14_t401_tsumogiri_b401_a402.png"
  },
  {
   "t": 411.66666666666663,
@@ -556,7 +525,7 @@
    0,
    45
   ],
-  "img": "events3/ev16_t412_tedashi_b410_a414.png"
+  "img": "events3/ev15_t412_tedashi_b410_a414.png"
  },
  {
   "t": 431.26666666666665,
@@ -592,7 +561,7 @@
    0,
    45
   ],
-  "img": "events3/ev17_t431_tsumogiri_b431_a432.png"
+  "img": "events3/ev16_t431_tsumogiri_b431_a432.png"
  },
  {
   "t": 509.6666666666667,
@@ -628,13 +597,13 @@
    42,
    87
   ],
-  "img": "events3/ev18_t510_tedashi_b509_a510.png"
+  "img": "events3/ev17_t510_tedashi_b509_a510.png"
  },
  {
   "t": 512.0666666666666,
   "t0": 511.46666666666664,
   "t1": 512.6666666666666,
-  "delta": 3641,
+  "delta": 3460,
   "sure": true,
   "round": 1,
   "tb": 511.06666666666666,
@@ -659,7 +628,7 @@
    42,
    87
   ],
-  "img": "events3/ev19_t512_tsumogiri_b511_a513.png"
+  "img": "events3/ev18_t512_tsumogiri_b511_a513.png"
  },
  {
   "t": 544.0666666666666,
@@ -690,7 +659,7 @@
    31,
    76
   ],
-  "img": "events3/ev20_t544_tsumogiri_b544_a545.png"
+  "img": "events3/ev19_t544_tsumogiri_b544_a545.png"
  },
  {
   "t": 549.2,
@@ -742,6 +711,6 @@
    29,
    74
   ],
-  "img": "events3/ev21_t549_tedashi_b547_a551.png"
+  "img": "events3/ev20_t549_tedashi_b547_a551.png"
  }
 ]

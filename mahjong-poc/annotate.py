@@ -51,6 +51,8 @@ def main():
     if not (meta and meta.get("video") == VIDEO and meta.get("size") == st.st_size
             and meta.get("mtime") == st.st_mtime_ns):
         sys.exit(f"results were generated for another video; run pipeline3.py on {VIDEO} first")
+    if not os.path.exists("events.json"):
+        sys.exit("events.json is missing or stale (pipeline3.py was interrupted); rerun it first")
     events = json.load(open("events.json"))
     marks = []  # (t_shown, label) — table cells fill in discard order
     for i, ev in enumerate(events):
