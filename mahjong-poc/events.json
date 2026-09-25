@@ -1,0 +1,525 @@
+[
+ {
+  "t": 9.333333333333332,
+  "t0": 7.6,
+  "t1": 11.066666666666666,
+  "delta": 1854,
+  "tb": 7.333333333333333,
+  "ta": 11.466666666666667,
+  "runs": [
+   [
+    912,
+    959
+   ]
+  ],
+  "shift": 12,
+  "ext": null,
+  "full": false,
+  "fname": null,
+  "label": "tsumogiri",
+  "ext_used": [
+   660,
+   879
+  ],
+  "img": "events3/ev00_t9_tsumogiri_b7_a11.png"
+ },
+ {
+  "t": 17.266666666666666,
+  "t0": 16.933333333333334,
+  "t1": 17.6,
+  "delta": 1353,
+  "tb": 16.8,
+  "ta": 18.0,
+  "runs": [
+   [
+    880,
+    973
+   ]
+  ],
+  "shift": 0,
+  "ext": null,
+  "full": false,
+  "fname": null,
+  "label": "tsumogiri",
+  "ext_used": [
+   660,
+   879
+  ],
+  "img": "events3/ev01_t17_tsumogiri_b17_a18.png"
+ },
+ {
+  "t": 37.86666666666667,
+  "t0": 37.733333333333334,
+  "t1": 38.0,
+  "delta": 1551,
+  "tb": 37.2,
+  "ta": 38.4,
+  "runs": [
+   [
+    775,
+    1037
+   ]
+  ],
+  "shift": 0,
+  "ext": null,
+  "full": false,
+  "fname": null,
+  "label": "tedashi",
+  "ext_used": [
+   660,
+   879
+  ],
+  "img": "events3/ev02_t38_tedashi_b37_a38.png"
+ },
+ {
+  "t": 210.53333333333333,
+  "t0": 209.73333333333332,
+  "t1": 211.33333333333334,
+  "delta": 943,
+  "tb": 209.6,
+  "ta": 211.86666666666667,
+  "runs": [
+   [
+    454,
+    538
+   ],
+   [
+    958,
+    1006
+   ]
+  ],
+  "shift": 0,
+  "ext": null,
+  "full": false,
+  "fname": null,
+  "label": "tedashi",
+  "ext_used": [
+   660,
+   879
+  ],
+  "img": "events3/ev03_t211_tedashi_b210_a212.png"
+ },
+ {
+  "t": 220.8,
+  "t0": 220.8,
+  "t1": 220.8,
+  "delta": 1038,
+  "tb": 220.66666666666666,
+  "ta": 221.33333333333334,
+  "runs": [],
+  "shift": 0,
+  "ext": null,
+  "full": false,
+  "fname": null,
+  "label": "tsumogiri",
+  "ext_used": [
+   660,
+   879
+  ],
+  "img": "events3/ev04_t221_tsumogiri_b221_a221.png"
+ },
+ {
+  "t": 223.53333333333333,
+  "t0": 223.46666666666667,
+  "t1": 223.6,
+  "delta": 1128,
+  "tb": 223.33333333333334,
+  "ta": 224.0,
+  "runs": [],
+  "shift": 0,
+  "ext": null,
+  "full": false,
+  "fname": null,
+  "label": "tsumogiri",
+  "ext_used": [
+   660,
+   879
+  ],
+  "img": "events3/ev05_t224_tsumogiri_b223_a224.png"
+ },
+ {
+  "t": 225.2,
+  "t0": 225.2,
+  "t1": 225.2,
+  "delta": 1026,
+  "tb": 225.06666666666666,
+  "ta": 225.6,
+  "runs": [
+   [
+    990,
+    1069
+   ]
+  ],
+  "shift": 0,
+  "ext": null,
+  "full": false,
+  "fname": null,
+  "label": "tsumogiri",
+  "ext_used": [
+   660,
+   879
+  ],
+  "img": "events3/ev06_t225_tsumogiri_b225_a226.png"
+ },
+ {
+  "t": 245.46666666666667,
+  "t0": 245.33333333333334,
+  "t1": 245.6,
+  "delta": 1178,
+  "tb": 245.2,
+  "ta": 246.0,
+  "runs": [],
+  "shift": 0,
+  "ext": null,
+  "full": false,
+  "fname": null,
+  "label": "tsumogiri",
+  "ext_used": [
+   660,
+   879
+  ],
+  "img": "events3/ev07_t245_tsumogiri_b245_a246.png"
+ },
+ {
+  "t": 248.06666666666666,
+  "t0": 247.86666666666667,
+  "t1": 248.26666666666668,
+  "delta": 1616,
+  "tb": 247.73333333333332,
+  "ta": 248.8,
+  "runs": [
+   [
+    895,
+    932
+   ]
+  ],
+  "shift": 0,
+  "ext": null,
+  "full": false,
+  "fname": null,
+  "label": "tsumogiri",
+  "ext_used": [
+   660,
+   879
+  ],
+  "img": "events3/ev08_t248_tsumogiri_b248_a249.png"
+ },
+ {
+  "t": 261.0,
+  "t0": 260.8,
+  "t1": 261.2,
+  "delta": 1743,
+  "tb": 260.6666666666667,
+  "ta": 261.6,
+  "runs": [],
+  "shift": 0,
+  "ext": null,
+  "full": false,
+  "fname": null,
+  "label": "tsumogiri",
+  "ext_used": [
+   660,
+   879
+  ],
+  "img": "events3/ev09_t261_tsumogiri_b261_a262.png"
+ },
+ {
+  "t": 290.5333333333333,
+  "t0": 290.26666666666665,
+  "t1": 290.8,
+  "delta": 1450,
+  "tb": 290.1333333333333,
+  "ta": 291.3333333333333,
+  "runs": [],
+  "shift": 0,
+  "ext": null,
+  "full": false,
+  "fname": null,
+  "label": "tsumogiri",
+  "ext_used": [
+   660,
+   879
+  ],
+  "img": "events3/ev10_t291_tsumogiri_b290_a291.png"
+ },
+ {
+  "t": 307.8666666666667,
+  "t0": 307.6,
+  "t1": 308.1333333333333,
+  "delta": 1559,
+  "tb": 307.46666666666664,
+  "ta": 308.53333333333336,
+  "runs": [],
+  "shift": 0,
+  "ext": [
+   660,
+   879
+  ],
+  "full": false,
+  "fname": null,
+  "label": "tsumogiri",
+  "ext_used": [
+   660,
+   879
+  ],
+  "img": "events3/ev11_t308_tsumogiri_b307_a309.png"
+ },
+ {
+  "t": 326.66666666666663,
+  "t0": 326.0,
+  "t1": 327.3333333333333,
+  "delta": 1346,
+  "tb": 325.6,
+  "ta": 328.53333333333336,
+  "runs": [
+   [
+    549,
+    766
+   ],
+   [
+    926,
+    1039
+   ]
+  ],
+  "shift": 0,
+  "ext": [
+   660,
+   879
+  ],
+  "full": false,
+  "fname": null,
+  "label": "tedashi",
+  "ext_used": [
+   660,
+   879
+  ],
+  "img": "events3/ev12_t327_tedashi_b326_a329.png"
+ },
+ {
+  "t": 347.3333333333333,
+  "t0": 345.3333333333333,
+  "t1": 349.3333333333333,
+  "delta": 1188,
+  "tb": 342.6666666666667,
+  "ta": 349.73333333333335,
+  "runs": [
+   [
+    547,
+    594
+   ],
+   [
+    658,
+    712
+   ]
+  ],
+  "shift": 0,
+  "ext": [
+   544,
+   707
+  ],
+  "full": false,
+  "fname": null,
+  "label": "tedashi",
+  "ext_used": [
+   544,
+   707
+  ],
+  "img": "events3/ev13_t347_tedashi_b343_a350.png"
+ },
+ {
+  "t": 401.0,
+  "t0": 400.8,
+  "t1": 401.2,
+  "delta": 1040,
+  "tb": 400.53333333333336,
+  "ta": 401.6,
+  "runs": [
+   [
+    940,
+    1013
+   ]
+  ],
+  "shift": 0,
+  "ext": [
+   550,
+   713
+  ],
+  "full": false,
+  "fname": null,
+  "label": "tsumogiri",
+  "ext_used": [
+   550,
+   713
+  ],
+  "img": "events3/ev14_t401_tsumogiri_b401_a402.png"
+ },
+ {
+  "t": 411.66666666666663,
+  "t0": 410.0,
+  "t1": 413.3333333333333,
+  "delta": 1360,
+  "tb": 409.6,
+  "ta": 413.73333333333335,
+  "runs": [
+   [
+    319,
+    362
+   ],
+   [
+    385,
+    420
+   ],
+   [
+    552,
+    602
+   ],
+   [
+    664,
+    720
+   ]
+  ],
+  "shift": 0,
+  "ext": [
+   550,
+   714
+  ],
+  "full": false,
+  "fname": null,
+  "label": "tedashi",
+  "ext_used": [
+   550,
+   714
+  ],
+  "img": "events3/ev15_t412_tedashi_b410_a414.png"
+ },
+ {
+  "t": 431.26666666666665,
+  "t0": 431.2,
+  "t1": 431.3333333333333,
+  "delta": 1670,
+  "tb": 430.26666666666665,
+  "ta": 431.73333333333335,
+  "runs": [
+   [
+    876,
+    926
+   ],
+   [
+    1006,
+    1063
+   ]
+  ],
+  "shift": 0,
+  "ext": [
+   546,
+   709
+  ],
+  "full": false,
+  "fname": null,
+  "label": "tsumogiri",
+  "ext_used": [
+   546,
+   709
+  ],
+  "img": "events3/ev16_t431_tsumogiri_b430_a432.png"
+ },
+ {
+  "t": 509.6666666666667,
+  "t0": 509.6,
+  "t1": 509.73333333333335,
+  "delta": 1505,
+  "tb": 509.46666666666664,
+  "ta": 510.1333333333333,
+  "runs": [],
+  "shift": 0,
+  "ext": [
+   546,
+   709
+  ],
+  "full": false,
+  "fname": null,
+  "label": "tsumogiri",
+  "ext_used": [
+   546,
+   709
+  ],
+  "img": "events3/ev17_t510_tsumogiri_b509_a510.png"
+ },
+ {
+  "t": 512.0666666666666,
+  "t0": 511.46666666666664,
+  "t1": 512.6666666666666,
+  "delta": 3641,
+  "tb": 511.06666666666666,
+  "ta": 513.0666666666667,
+  "runs": [
+   [
+    390,
+    546
+   ],
+   [
+    885,
+    993
+   ]
+  ],
+  "shift": 0,
+  "ext": [
+   546,
+   709
+  ],
+  "full": false,
+  "fname": null,
+  "label": "tedashi",
+  "ext_used": [
+   546,
+   709
+  ],
+  "img": "events3/ev18_t512_tedashi_b511_a513.png"
+ },
+ {
+  "t": 544.0666666666666,
+  "t0": 544.0,
+  "t1": 544.1333333333333,
+  "delta": 1633,
+  "tb": 543.0666666666667,
+  "ta": 545.7333333333333,
+  "runs": [
+   [
+    0,
+    1069
+   ]
+  ],
+  "shift": 0,
+  "ext": [
+   546,
+   709
+  ],
+  "full": true,
+  "fname": null,
+  "label": "uncertain",
+  "ext_used": null,
+  "img": "events3/ev19_t544_uncertain_b543_a546.png"
+ },
+ {
+  "t": 549.2,
+  "t0": 547.6,
+  "t1": 550.8,
+  "delta": 1519,
+  "tb": 545.7333333333333,
+  "ta": 551.3333333333334,
+  "runs": [],
+  "shift": 6,
+  "ext": [
+   546,
+   709
+  ],
+  "full": false,
+  "fname": null,
+  "label": "tsumogiri",
+  "ext_used": [
+   546,
+   709
+  ],
+  "img": "events3/ev20_t549_tsumogiri_b546_a551.png"
+ }
+]
