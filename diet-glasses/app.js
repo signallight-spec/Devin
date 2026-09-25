@@ -85,29 +85,44 @@ const todayKey = () => dayKeyFor(Date.now());
 
 // Earlier builds keyed logs by UTC date. Re-bucket any stored entries by their
 // timestamps into local-day keys once, so near-midnight meals land on the right day.
+// Writes complete before any source key is dropped, so a quota/IO failure loses nothing.
 (function migrateLogs() {
-  if (localStorage.getItem('dg_migrated') === '1') return;
-  const legacyKeys = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (k && k.startsWith('dg_log_')) legacyKeys.push(k);
-  }
-  const buckets = new Map();
-  for (const k of legacyKeys) {
-    let entries = [];
-    try { entries = JSON.parse(localStorage.getItem(k) || '[]'); } catch {}
-    if (!Array.isArray(entries)) entries = [];
-    for (const e of entries) {
-      const bk = dayKeyFor(e.t);
-      buckets.set(bk, [...(buckets.get(bk) || []), e]);
+  try {
+    if (localStorage.getItem('dg_migrated') === '1') return;
+    const sig = e => `${e.t}|${e.name}|${e.kcal}`;
+    const parse = s => { try { const v = JSON.parse(s || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
+
+    const legacyKeys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('dg_log_')) legacyKeys.push(k);
     }
-    localStorage.removeItem(k);
+    const legacyKeySet = new Set(legacyKeys);
+
+    const buckets = new Map();
+    for (const k of legacyKeys) {
+      for (const e of parse(localStorage.getItem(k))) {
+        const bk = dayKeyFor(e.t);
+        if (!buckets.has(bk)) buckets.set(bk, []);
+        const arr = buckets.get(bk);
+        if (!arr.some(x => sig(x) === sig(e))) arr.push(e);
+      }
+    }
+
+    for (const [bk, incoming] of buckets) {
+      const existing = legacyKeySet.has(bk)
+        ? []
+        : parse(localStorage.getItem(bk)).filter(x => !incoming.some(n => sig(n) === sig(x)));
+      localStorage.setItem(bk, JSON.stringify([...existing, ...incoming]));
+    }
+
+    for (const k of legacyKeys) {
+      if (!buckets.has(k)) localStorage.removeItem(k);
+    }
+    localStorage.setItem('dg_migrated', '1');
+  } catch (e) {
+    console.warn('meal-log migration failed; original entries preserved', e);
   }
-  for (const [bk, entries] of buckets) {
-    const existing = (() => { try { return JSON.parse(localStorage.getItem(bk) || '[]'); } catch { return []; } })();
-    localStorage.setItem(bk, JSON.stringify([...existing, ...entries]));
-  }
-  localStorage.setItem('dg_migrated', '1');
 })();
 let limit = parseInt(localStorage.getItem('dg_limit') || '2000', 10);
 let autoLog = localStorage.getItem('dg_autolog') !== '0';
