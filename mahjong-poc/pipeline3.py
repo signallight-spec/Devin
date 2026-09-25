@@ -103,7 +103,10 @@ def align_diff(bb, aa):
 def main():
     import os as _os
     _st = _os.stat(VIDEO)
-    ident = {"video": VIDEO, "size": _st.st_size, "mtime": _st.st_mtime_ns}
+    # cache identity: the video content AND the measurement settings the
+    # feature log was sampled under
+    ident = {"video": VIDEO, "size": _st.st_size, "mtime": _st.st_mtime_ns,
+             "cfg": f"{R_POND}|{R_HAND}|{FPS}"}
     meta = None
     if _os.path.exists("log3.meta.json") and _os.path.exists("log3.json"):
         meta = json.load(open("log3.meta.json"))
@@ -190,10 +193,17 @@ def main():
         tb, ta = befs[-1], afts[0]
         fb, fa = frame(tb), frame(ta)
         bb, aa = band(fb), band(fa)
-        det = band_extent(bb) or band_extent(aa)
-        ext = det or last_ext
+        det = band_extent(bb)
+        det_src = "b"
+        if det is None:
+            det = band_extent(aa)
+            det_src = "a" if det else None
+        ext = det or (last_ext[0] if last_ext else None)
+        # x-extent coords live in the frame they were detected on; remember
+        # which frame ('b'/'a') so classify can map them into diff coords
+        ext_src = det_src if det else (last_ext[1] if last_ext else None)
         if ext:
-            last_ext = ext
+            last_ext = (ext, ext_src)
         dimg, sh = align_diff(bb, aa)
         # zero out pixels that are skin in either frame (hands/arms passing)
         skb, ska = band_skin(fb), band_skin(fa)
@@ -222,8 +232,9 @@ def main():
         region = sk[sy0:sy1, :]
         skfrac = float(region.mean()) if region.size else 0.0
         results.append({**ev, "tb": tb, "ta": ta,
-                        "runs": runs, "shift": sh, "ext": ext, "full": full,
-                        "skfrac": skfrac,
+                        "runs": runs, "shift": sh, "ext": ext,
+                        "det": det is not None, "ext_src": ext_src,
+                        "full": full, "skfrac": skfrac,
                         "bb": bb, "aa": aa, "fname": None})
     cap.release()
 
@@ -232,22 +243,28 @@ def main():
     def classify(r):
         if r["full"]:
             return "uncertain", None
-        ext = r["ext"]
+        ext, src = r["ext"], r.get("ext_src")
         if ext is None and known:
             # nearest detected extent in event order
             j = results.index(r)
-            cand = [(abs(k - j), e["ext"]) for k, e in enumerate(results) if e.get("ext")]
-            ext = min(cand, key=lambda c: c[0])[1] if cand else None
+            cand = [(abs(k - j), (e["ext"], e["ext_src"])) for k, e in enumerate(results) if e.get("ext")]
+            ext, src = min(cand, key=lambda c: c[0])[1] if cand else (None, None)
         if not r["runs"]:
-            # an empty diff only means tsumogiri when the row was visible;
-            # heavy occlusion makes 'no change' unobservable
+            # an empty diff is tsumogiri only when this event actually saw the
+            # row; heavy occlusion or no detection makes 'no change' unobservable
+            if not r.get("det"):
+                return "uncertain", ext
             return ("uncertain" if r.get("skfrac", 0.0) > 0.35 else "tsumogiri"), ext
         if ext is None:
             return "uncertain", None
         rx0, rx1 = ext[0], ext[1]
-        # run coords live in the aligned diff image; when shift<0 the left
-        # columns were cropped away, so shift the extent into diff coords
-        adj = r["shift"] if r["shift"] < 0 else 0
+        # run coords live in the aligned diff image. Map the extent into that
+        # frame: a 'b' extent loses its left columns when shift<0; an 'a'
+        # extent is pulled left by sh when shift>0 (aa col j -> diff col j-sh)
+        if src == "a":
+            adj = -r["shift"] if r["shift"] > 0 else 0
+        else:
+            adj = r["shift"] if r["shift"] < 0 else 0
         rx0 += adj; rx1 += adj
         # a partially detected row (hand occludes part) can start inside the
         # real row; allow a ~1.5-tile margin left of rx0 but require overlap

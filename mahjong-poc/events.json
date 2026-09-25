@@ -35,6 +35,8 @@
    34,
    79
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.0031926065952530983,
   "fname": null,
@@ -67,6 +69,8 @@
    39,
    84
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.00328141225337487,
   "fname": null,
@@ -99,6 +103,8 @@
    39,
    84
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.014143302180685359,
   "fname": null,
@@ -135,6 +141,8 @@
    39,
    84
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.0003322949117341641,
   "fname": null,
@@ -162,6 +170,8 @@
    40,
    85
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.0,
   "fname": null,
@@ -189,6 +199,8 @@
    39,
    84
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.0,
   "fname": null,
@@ -221,6 +233,8 @@
    40,
    85
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.0,
   "fname": null,
@@ -248,6 +262,8 @@
    40,
    85
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.0,
   "fname": null,
@@ -275,6 +291,8 @@
    39,
    84
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.00031152647975077883,
   "fname": null,
@@ -302,6 +320,8 @@
    39,
    84
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 8.307372793354102e-05,
   "fname": null,
@@ -334,6 +354,8 @@
    50,
    95
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.055514018691588785,
   "fname": null,
@@ -361,6 +383,8 @@
    0,
    45
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.031630321910695744,
   "fname": null,
@@ -401,6 +425,8 @@
    0,
    45
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.15574247144340603,
   "fname": null,
@@ -437,6 +463,8 @@
    1,
    46
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.0931048805815161,
   "fname": null,
@@ -469,6 +497,8 @@
    0,
    45
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.14990654205607476,
   "fname": null,
@@ -513,6 +543,8 @@
    0,
    45
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.16074766355140188,
   "fname": null,
@@ -545,6 +577,8 @@
    0,
    45
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.11468328141225337,
   "fname": null,
@@ -577,6 +611,8 @@
    42,
    87
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.00529595015576324,
   "fname": null,
@@ -604,6 +640,8 @@
    42,
    87
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.07673935617860851,
   "fname": null,
@@ -631,6 +669,8 @@
    31,
    76
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.01588785046728972,
   "fname": null,
@@ -679,6 +719,8 @@
    29,
    74
   ],
+  "det": true,
+  "ext_src": "b",
   "full": false,
   "skfrac": 0.02706766917293233,
   "fname": null,
