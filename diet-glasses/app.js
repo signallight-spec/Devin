@@ -77,10 +77,38 @@ let currentFood = null;         // {prompt,name,kcal,score}
 let lastLabel = null, streak = 0;
 const loggedAt = new Map();     // prompt -> epoch ms
 
-const todayKey = () => {
-  const d = new Date();
+const dayKeyFor = t => {
+  const d = new Date(t);
   return `dg_log_${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+const todayKey = () => dayKeyFor(Date.now());
+
+// Earlier builds keyed logs by UTC date. Re-bucket any stored entries by their
+// timestamps into local-day keys once, so near-midnight meals land on the right day.
+(function migrateLogs() {
+  if (localStorage.getItem('dg_migrated') === '1') return;
+  const legacyKeys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('dg_log_')) legacyKeys.push(k);
+  }
+  const buckets = new Map();
+  for (const k of legacyKeys) {
+    let entries = [];
+    try { entries = JSON.parse(localStorage.getItem(k) || '[]'); } catch {}
+    if (!Array.isArray(entries)) entries = [];
+    for (const e of entries) {
+      const bk = dayKeyFor(e.t);
+      buckets.set(bk, [...(buckets.get(bk) || []), e]);
+    }
+    localStorage.removeItem(k);
+  }
+  for (const [bk, entries] of buckets) {
+    const existing = (() => { try { return JSON.parse(localStorage.getItem(bk) || '[]'); } catch { return []; } })();
+    localStorage.setItem(bk, JSON.stringify([...existing, ...entries]));
+  }
+  localStorage.setItem('dg_migrated', '1');
+})();
 let limit = parseInt(localStorage.getItem('dg_limit') || '2000', 10);
 let autoLog = localStorage.getItem('dg_autolog') !== '0';
 limitInput.value = limit;
