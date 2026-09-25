@@ -42,12 +42,24 @@ def band_skin(img):
     return skin_mask(img)[y0:y1, x0:x1]
 
 def band_extent(b):
-    """x-extent of the standing tile row in the strip: longest contiguous
-    block of columns with strong horizontal gradient (tile seams)."""
-    b = b[:ROW_STRIP, :].astype(np.float32)
-    gx = np.abs(np.diff(b, axis=1)).mean(axis=0)
-    on = gx > 6.0
-    xs = np.where(on)[0]
+    """Locate the standing tile row in the band. Returns (x0, x1, y0, y1).
+
+    The row's y-position drifts between rounds, so first find the 45px
+    y-window with the strongest vertical-seam (|dI/dx|) energy, then chain
+    the blocks of high-gradient columns inside it (occlusions split the row
+    into several blocks; merge blocks closer than 150px)."""
+    g = np.abs(np.diff(b.astype(np.float32), axis=1))
+    H = g.shape[0]
+    win = 45
+    if H <= win:
+        return None
+    ey = np.array([g[i:i + win, :].mean() for i in range(H - win)])
+    mx = ey.max()
+    if mx < 3.0:
+        return None
+    y = int(np.where(ey > 0.65 * mx)[0].min())
+    gx = g[y:y + win, :].mean(axis=0)
+    xs = np.where(gx > 6.0)[0]
     if len(xs) < 50:
         return None
     blocks, cur = [], [xs[0], xs[0]]
@@ -57,10 +69,20 @@ def band_extent(b):
         else:
             blocks.append(cur); cur = [x, x]
     blocks.append(cur)
-    best = max(blocks, key=lambda bl: bl[1] - bl[0])
+    blocks = [bl for bl in blocks if bl[1] - bl[0] >= 40]
+    if not blocks:
+        return None
+    groups, cur = [], [blocks[0][0], blocks[0][1]]
+    for bl in blocks[1:]:
+        if bl[0] - cur[1] <= 150:
+            cur[1] = bl[1]
+        else:
+            groups.append(cur); cur = [bl[0], bl[1]]
+    groups.append(cur)
+    best = max(groups, key=lambda gr: gr[1] - gr[0])
     if best[1] - best[0] < 140:
         return None
-    return int(best[0]), int(best[1])
+    return int(best[0]), int(best[1]), y, y + win
 
 def align_diff(bb, aa):
     best, bs = None, 0
@@ -80,9 +102,13 @@ def align_diff(bb, aa):
 
 def main():
     import os as _os
-    if _os.path.exists("log3.json"):
+    meta = None
+    if _os.path.exists("log3.meta.json") and _os.path.exists("log3.json"):
+        meta = json.load(open("log3.meta.json"))
+    cached = meta is not None and meta.get("video") == VIDEO
+    if cached:
         log = json.load(open("log3.json"))
-        src_fps = 60.0
+        src_fps = meta["src_fps"]
     else:
         cap = cv2.VideoCapture(VIDEO)
         src_fps = cap.get(cv2.CAP_PROP_FPS) or 60
@@ -103,6 +129,7 @@ def main():
                         "skin_pond": float(sm[R_POND[1]:R_POND[3], R_POND[0]:R_POND[2]].mean())})
         cap.release()
         json.dump(log, open("log3.json", "w"))
+        json.dump({"video": VIDEO, "src_fps": src_fps}, open("log3.meta.json", "w"))
     ts = [e["t"] for e in log]
 
     # episodes of hand in pond
@@ -161,7 +188,8 @@ def main():
         tb, ta = befs[-1], afts[0]
         fb, fa = frame(tb), frame(ta)
         bb, aa = band(fb), band(fa)
-        ext = band_extent(bb) or band_extent(aa) or last_ext
+        det = band_extent(bb) or band_extent(aa)
+        ext = det or last_ext
         if ext:
             last_ext = ext
         dimg, sh = align_diff(bb, aa)
@@ -172,8 +200,13 @@ def main():
         else:
             sk = skb[:, -sh:] | ska[:, :ska.shape[1]+sh]
         dimg = dimg * (~sk).astype(int)
-        colchg = (dimg[:ROW_STRIP, :] > 45).mean(axis=0)
-        on = colchg > 0.30
+        # measure change inside this event's detected row band; without a
+        # detection use the broad range where the row can sit (melds below)
+        sy0, sy1 = (det[2], det[3]) if det else (0, 90)
+        colchg = (dimg[sy0:sy1, :] > 45).mean(axis=0)
+        # a broad fallback strip dilutes the row's share of rows -> lower bar
+        thresh = 0.30 if det else 0.15
+        on = colchg > thresh
         runs = []
         for i2, v in enumerate(on):
             if v and (not runs or i2 - runs[-1][1] > 20): runs.append([i2, i2])
@@ -182,8 +215,13 @@ def main():
         runs = [r for r in runs if r[1] - r[0] >= 25]
         W = bb.shape[1]
         full = any(r[0] < W * 0.05 and r[1] > W * 0.95 for r in runs)
+        # fraction of the band strip occluded by skin — when large, an empty
+        # diff is unobservable rather than evidence for tsumogiri
+        region = sk[sy0:sy1, :]
+        skfrac = float(region.mean()) if region.size else 0.0
         results.append({**ev, "tb": tb, "ta": ta,
                         "runs": runs, "shift": sh, "ext": ext, "full": full,
+                        "skfrac": skfrac,
                         "bb": bb, "aa": aa, "fname": None})
     cap.release()
 
@@ -199,14 +237,24 @@ def main():
             cand = [(abs(k - j), e["ext"]) for k, e in enumerate(results) if e.get("ext")]
             ext = min(cand, key=lambda c: c[0])[1] if cand else None
         if not r["runs"]:
-            return "tsumogiri", ext
+            # an empty diff only means tsumogiri when the row was visible;
+            # heavy occlusion makes 'no change' unobservable
+            return ("uncertain" if r.get("skfrac", 0.0) > 0.35 else "tsumogiri"), ext
         if ext is None:
             return "uncertain", None
-        rx0, rx1 = ext
-        pitch = (rx1 - rx0) / 13.0
+        rx0, rx1 = ext[0], ext[1]
+        # run coords live in the aligned diff image; when shift<0 the left
+        # columns were cropped away, so shift the extent into diff coords
+        adj = r["shift"] if r["shift"] < 0 else 0
+        rx0 += adj; rx1 += adj
+        # a partially detected row (hand occludes part) can start inside the
+        # real row; allow a ~1.5-tile margin left of rx0 but require overlap
+        pitch = max(25.0, min(45.0, (rx1 - rx0) / 5.0))
+        row_l = rx0 - int(1.5 * pitch)
         edge_zone = rx1 - int(1.4 * pitch)
-        interior = [x for x in r["runs"] if x[0] < edge_zone and x[0] < rx1 - 5]
-        edge_only = [x for x in r["runs"] if edge_zone <= x[0] < rx1 - 5]
+        on_row = [x for x in r["runs"] if x[1] > row_l and x[0] < rx1 - 5]
+        interior = [x for x in on_row if x[0] < edge_zone]
+        edge_only = [x for x in on_row if x[0] >= edge_zone]
         if interior:
             return "tedashi", ext
         if edge_only:

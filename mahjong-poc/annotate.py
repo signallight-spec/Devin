@@ -51,9 +51,9 @@ def main():
             continue
         pos = find_new_tile(fb, fa)
         if pos:
-            markers.append({"t": ev["t"], "x": pos[0], "y": pos[1], "label": ev["label"]})
+            markers.append({"t": ev["ta"], "x": pos[0], "y": pos[1], "label": ev["label"]})
         else:
-            markers.append({"t": ev["t"], "x": None, "y": None, "label": ev["label"]})
+            markers.append({"t": ev["ta"], "x": None, "y": None, "label": ev["label"]})
     print(f"{len(markers)} markers")
 
     # sweep intervals = long merged skin-in-pond episodes (deal/transition)
@@ -66,10 +66,13 @@ def main():
         else:
             if cur: eps.append(cur); cur = None
     if cur: eps.append(cur)
-    SWEEPS = []
+    # merge adjacent episodes first (same rule as pipeline3), then keep
+    # intervals long enough to be deal/transition phases
+    merged = []
     for a, b in eps:
-        if SWEEPS and a - SWEEPS[-1][1] < 1.5: SWEEPS[-1][1] = b
-        elif b - a > 6: SWEEPS.append([a, b])
+        if merged and a - merged[-1][1] < 1.5: merged[-1][1] = b
+        else: merged.append([a, b])
+    SWEEPS = [m for m in merged if m[1] - m[0] > 6]
     print("sweep intervals:", [[round(a,1),round(b,1)] for a,b in SWEEPS])
 
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
