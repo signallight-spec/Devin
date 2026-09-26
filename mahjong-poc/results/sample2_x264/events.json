@@ -1,0 +1,712 @@
+[
+ {
+  "t": 20.086733333333335,
+  "t0": 18.685333333333332,
+  "t1": 21.488133333333334,
+  "delta": 313,
+  "sure": true,
+  "round": 0,
+  "player": "self",
+  "tb": 18.551866666666665,
+  "ta": 22.288933333333333,
+  "runs": [
+   [
+    257,
+    572
+   ]
+  ],
+  "shift": 46,
+  "ext": [
+   245,
+   477,
+   48,
+   93
+  ],
+  "det": true,
+  "ext_src": "b",
+  "full": false,
+  "skfrac": 0.17452107279693488,
+  "fname": null,
+  "label": "tedashi",
+  "ext_used": [
+   245,
+   477,
+   48,
+   93
+  ],
+  "img": "results/sample2_x264/events3/ev00_t20_tedashi_b19_a22.png"
+ },
+ {
+  "t": 28.16146666666667,
+  "t0": 26.693333333333335,
+  "t1": 29.6296,
+  "delta": 309,
+  "sure": true,
+  "round": 0,
+  "player": "right",
+  "label": "opp"
+ },
+ {
+  "t": 32.16546666666667,
+  "t0": 31.36466666666667,
+  "t1": 32.96626666666667,
+  "delta": 579,
+  "sure": true,
+  "round": 0,
+  "player": "across",
+  "label": "opp"
+ },
+ {
+  "t": 38.17146666666667,
+  "t0": 35.101733333333335,
+  "t1": 41.2412,
+  "delta": 331,
+  "sure": true,
+  "round": 0,
+  "player": "left",
+  "label": "opp"
+ },
+ {
+  "t": 45.57886666666667,
+  "t0": 44.31093333333333,
+  "t1": 46.8468,
+  "delta": 702,
+  "sure": true,
+  "round": 0,
+  "player": "right",
+  "label": "opp"
+ },
+ {
+  "t": 51.184466666666665,
+  "t0": 50.4504,
+  "t1": 51.918533333333336,
+  "delta": 386,
+  "sure": true,
+  "round": 0,
+  "player": "across",
+  "label": "opp"
+ },
+ {
+  "t": 57.99126666666667,
+  "t0": 54.854800000000004,
+  "t1": 61.12773333333333,
+  "delta": 844,
+  "sure": true,
+  "round": 0,
+  "player": "self",
+  "tb": 54.320933333333336,
+  "ta": 61.52813333333334,
+  "runs": [
+   [
+    356,
+    608
+   ]
+  ],
+  "shift": -4,
+  "ext": [
+   236,
+   507,
+   50,
+   95
+  ],
+  "det": true,
+  "ext_src": "b",
+  "full": false,
+  "skfrac": 0.17433374333743337,
+  "fname": null,
+  "label": "tedashi",
+  "ext_used": [
+   236,
+   507,
+   50,
+   95
+  ],
+  "img": "results/sample2_x264/events3/ev06_t58_tedashi_b54_a62.png"
+ },
+ {
+  "t": 64.66460000000001,
+  "t0": 63.2632,
+  "t1": 66.066,
+  "delta": 308,
+  "sure": true,
+  "round": 0,
+  "player": "right",
+  "label": "opp"
+ },
+ {
+  "t": 69.069,
+  "t0": 68.60186666666667,
+  "t1": 69.53613333333334,
+  "delta": 415,
+  "sure": true,
+  "round": 0,
+  "player": "across",
+  "label": "opp"
+ },
+ {
+  "t": 76.34293333333333,
+  "t0": 73.00626666666666,
+  "t1": 79.67960000000001,
+  "delta": 731,
+  "sure": true,
+  "round": 0,
+  "player": "self",
+  "tb": 71.53813333333333,
+  "ta": 80.21346666666666,
+  "runs": [
+   [
+    378,
+    579
+   ]
+  ],
+  "shift": -2,
+  "ext": [
+   251,
+   527,
+   46,
+   91
+  ],
+  "det": true,
+  "ext_src": "b",
+  "full": false,
+  "skfrac": 0.20893719806763286,
+  "fname": null,
+  "label": "tedashi",
+  "ext_used": [
+   251,
+   527,
+   46,
+   91
+  ],
+  "img": "results/sample2_x264/events3/ev09_t76_tedashi_b72_a80.png"
+ },
+ {
+  "t": 83.14973333333333,
+  "t0": 82.08200000000001,
+  "t1": 84.21746666666667,
+  "delta": 442,
+  "sure": true,
+  "round": 0,
+  "player": "right",
+  "label": "opp"
+ },
+ {
+  "t": 91.55813333333333,
+  "t0": 90.22346666666667,
+  "t1": 92.89280000000001,
+  "delta": 619,
+  "sure": true,
+  "round": 0,
+  "player": "left",
+  "label": "opp"
+ },
+ {
+  "t": 97.56413333333333,
+  "t0": 96.096,
+  "t1": 99.03226666666667,
+  "delta": 863,
+  "sure": false,
+  "round": 0,
+  "player": "self",
+  "tb": 93.56013333333334,
+  "ta": 100.76733333333334,
+  "runs": [
+   [
+    43,
+    74
+   ],
+   [
+    294,
+    319
+   ],
+   [
+    470,
+    613
+   ]
+  ],
+  "shift": 0,
+  "ext": [
+   239,
+   511,
+   46,
+   91
+  ],
+  "det": true,
+  "ext_src": "b",
+  "full": false,
+  "skfrac": 0.5748366013071895,
+  "fname": null,
+  "label": "tedashi",
+  "ext_used": [
+   239,
+   511,
+   46,
+   91
+  ],
+  "img": "results/sample2_x264/events3/ev13_t98_tedashi_b94_a101.png"
+ },
+ {
+  "t": 102.03526666666667,
+  "t0": 100.76733333333334,
+  "t1": 103.3032,
+  "delta": 436,
+  "sure": true,
+  "round": 0,
+  "player": "right",
+  "label": "opp"
+ },
+ {
+  "t": 105.83906666666667,
+  "t0": 105.43866666666666,
+  "t1": 106.23946666666667,
+  "delta": 472,
+  "sure": true,
+  "round": 0,
+  "player": "across",
+  "label": "opp"
+ },
+ {
+  "t": 111.3112,
+  "t0": 110.11,
+  "t1": 112.5124,
+  "delta": 1224,
+  "sure": false,
+  "round": 0,
+  "player": "self",
+  "tb": 108.77533333333334,
+  "ta": 115.44866666666667,
+  "runs": [
+   [
+    57,
+    104
+   ],
+   [
+    388,
+    498
+   ],
+   [
+    528,
+    613
+   ]
+  ],
+  "shift": 0,
+  "ext": [
+   254,
+   531,
+   45,
+   90
+  ],
+  "det": true,
+  "ext_src": "b",
+  "full": false,
+  "skfrac": 0.16157240272763737,
+  "fname": null,
+  "label": "tedashi",
+  "ext_used": [
+   254,
+   531,
+   45,
+   90
+  ],
+  "img": "results/sample2_x264/events3/ev16_t111_tedashi_b109_a115.png"
+ },
+ {
+  "t": 120.12,
+  "t0": 119.18573333333333,
+  "t1": 121.05426666666666,
+  "delta": 393,
+  "sure": true,
+  "round": 0,
+  "player": "right",
+  "label": "opp"
+ },
+ {
+  "t": 140.20673333333332,
+  "t0": 139.87306666666666,
+  "t1": 140.5404,
+  "delta": 463,
+  "sure": true,
+  "round": 0,
+  "player": "across",
+  "label": "opp"
+ },
+ {
+  "t": 146.41293333333334,
+  "t0": 145.07826666666668,
+  "t1": 147.7476,
+  "delta": 391,
+  "sure": true,
+  "round": 0,
+  "player": "self",
+  "tb": 143.3432,
+  "ta": 149.88306666666668,
+  "runs": [
+   [
+    398,
+    492
+   ],
+   [
+    514,
+    613
+   ]
+  ],
+  "shift": 0,
+  "ext": [
+   245,
+   523,
+   48,
+   93
+  ],
+  "det": true,
+  "ext_src": "b",
+  "full": false,
+  "skfrac": 0.14908073541167066,
+  "fname": null,
+  "label": "tedashi",
+  "ext_used": [
+   245,
+   523,
+   48,
+   93
+  ],
+  "img": "results/sample2_x264/events3/ev19_t146_tedashi_b143_a150.png"
+ },
+ {
+  "t": 163.09626666666668,
+  "t0": 159.35920000000002,
+  "t1": 166.83333333333334,
+  "delta": 451,
+  "sure": true,
+  "round": 0,
+  "player": "self",
+  "tb": 159.22573333333332,
+  "ta": 168.03453333333334,
+  "runs": [
+   [
+    377,
+    449
+   ],
+   [
+    511,
+    585
+   ]
+  ],
+  "shift": -2,
+  "ext": [
+   243,
+   523,
+   48,
+   93
+  ],
+  "det": true,
+  "ext_src": "b",
+  "full": false,
+  "skfrac": 0.14722222222222223,
+  "fname": null,
+  "label": "tedashi",
+  "ext_used": [
+   243,
+   523,
+   48,
+   93
+  ],
+  "img": "results/sample2_x264/events3/ev20_t163_tedashi_b159_a168.png"
+ },
+ {
+  "t": 172.23873333333336,
+  "t0": 171.7716,
+  "t1": 172.70586666666668,
+  "delta": 543,
+  "sure": true,
+  "round": 0,
+  "player": "right",
+  "label": "opp"
+ },
+ {
+  "t": 181.3812,
+  "t0": 178.04453333333333,
+  "t1": 184.71786666666668,
+  "delta": 891,
+  "sure": true,
+  "round": 0,
+  "player": "across",
+  "label": "opp"
+ },
+ {
+  "t": 195.92906666666667,
+  "t0": 192.99280000000002,
+  "t1": 198.86533333333333,
+  "delta": 727,
+  "sure": true,
+  "round": 0,
+  "player": "right",
+  "label": "opp"
+ },
+ {
+  "t": 205.53866666666667,
+  "t0": 201.8016,
+  "t1": 209.27573333333333,
+  "delta": 695,
+  "sure": false,
+  "round": 0,
+  "player": "self",
+  "tb": 201.40120000000002,
+  "ta": 210.47693333333333,
+  "runs": [
+   [
+    417,
+    460
+   ],
+   [
+    520,
+    565
+   ]
+  ],
+  "shift": 0,
+  "ext": [
+   256,
+   529,
+   44,
+   89
+  ],
+  "det": true,
+  "ext_src": "b",
+  "full": false,
+  "skfrac": 0.1540903540903541,
+  "fname": null,
+  "label": "tedashi",
+  "ext_used": [
+   256,
+   529,
+   44,
+   89
+  ],
+  "img": "results/sample2_x264/events3/ev24_t206_tedashi_b201_a210.png"
+ },
+ {
+  "t": 212.34546666666665,
+  "t0": 211.8116,
+  "t1": 212.87933333333334,
+  "delta": 565,
+  "sure": true,
+  "round": 0,
+  "player": "right",
+  "label": "opp"
+ },
+ {
+  "t": 219.48593333333335,
+  "t0": 218.35146666666668,
+  "t1": 220.62040000000002,
+  "delta": 614,
+  "sure": true,
+  "round": 0,
+  "player": "across",
+  "label": "opp"
+ },
+ {
+  "t": 227.62740000000002,
+  "t0": 224.75786666666667,
+  "t1": 230.49693333333335,
+  "delta": 580,
+  "sure": true,
+  "round": 0,
+  "player": "left",
+  "label": "opp"
+ },
+ {
+  "t": 233.56666666666666,
+  "t0": 233.0328,
+  "t1": 234.10053333333335,
+  "delta": 365,
+  "sure": true,
+  "round": 0,
+  "player": "right",
+  "label": "opp"
+ },
+ {
+  "t": 240.6404,
+  "t0": 239.4392,
+  "t1": 241.8416,
+  "delta": 521,
+  "sure": true,
+  "round": 0,
+  "player": "across",
+  "label": "opp"
+ },
+ {
+  "t": 249.51593333333335,
+  "t0": 246.77986666666666,
+  "t1": 252.252,
+  "delta": 703,
+  "sure": true,
+  "round": 0,
+  "player": "left",
+  "label": "opp"
+ },
+ {
+  "t": 258.1245333333334,
+  "t0": 257.59066666666666,
+  "t1": 258.65840000000003,
+  "delta": 416,
+  "sure": true,
+  "round": 0,
+  "player": "right",
+  "label": "opp"
+ },
+ {
+  "t": 262.86260000000004,
+  "t0": 261.5946666666667,
+  "t1": 264.13053333333335,
+  "delta": 444,
+  "sure": true,
+  "round": 0,
+  "player": "across",
+  "label": "opp"
+ },
+ {
+  "t": 272.20526666666666,
+  "t0": 270.40346666666665,
+  "t1": 274.0070666666667,
+  "delta": 378,
+  "sure": true,
+  "round": 0,
+  "player": "self",
+  "tb": 270.27,
+  "ta": 277.0768,
+  "runs": [
+   [
+    525,
+    613
+   ]
+  ],
+  "shift": 0,
+  "ext": [
+   252,
+   527,
+   45,
+   90
+  ],
+  "det": true,
+  "ext_src": "b",
+  "full": false,
+  "skfrac": 0.1583030303030303,
+  "fname": null,
+  "label": "tsumogiri",
+  "ext_used": [
+   252,
+   527,
+   45,
+   90
+  ],
+  "img": "results/sample2_x264/events3/ev33_t272_tsumogiri_b270_a277.png"
+ },
+ {
+  "t": 279.81286666666665,
+  "t0": 278.14453333333336,
+  "t1": 281.4812,
+  "delta": 732,
+  "sure": true,
+  "round": 0,
+  "player": "right",
+  "label": "opp"
+ },
+ {
+  "t": 291.09080000000006,
+  "t0": 289.75613333333337,
+  "t1": 292.4254666666667,
+  "delta": 454,
+  "sure": true,
+  "round": 0,
+  "player": "self",
+  "tb": 289.62266666666665,
+  "ta": 296.02906666666667,
+  "runs": [],
+  "shift": 0,
+  "ext": [
+   238,
+   521,
+   47,
+   92
+  ],
+  "det": true,
+  "ext_src": "b",
+  "full": false,
+  "skfrac": 0.15861798193953672,
+  "fname": null,
+  "label": "tsumogiri",
+  "ext_used": [
+   238,
+   521,
+   47,
+   92
+  ],
+  "img": "results/sample2_x264/events3/ev35_t291_tsumogiri_b290_a296.png"
+ },
+ {
+  "t": 297.09680000000003,
+  "t0": 296.296,
+  "t1": 297.8976,
+  "delta": 482,
+  "sure": true,
+  "round": 0,
+  "player": "right",
+  "label": "opp"
+ },
+ {
+  "t": 300.9006,
+  "t0": 300.4334666666667,
+  "t1": 301.3677333333333,
+  "delta": 426,
+  "sure": true,
+  "round": 0,
+  "player": "right",
+  "label": "opp"
+ },
+ {
+  "t": 304.77113333333335,
+  "t0": 304.30400000000003,
+  "t1": 305.2382666666667,
+  "delta": 415,
+  "sure": true,
+  "round": 0,
+  "player": "left",
+  "label": "opp"
+ },
+ {
+  "t": 308.24126666666666,
+  "t0": 308.04106666666667,
+  "t1": 308.44146666666666,
+  "delta": 3731,
+  "sure": true,
+  "round": 0,
+  "player": "self",
+  "tb": 306.1725333333333,
+  "ta": 313.1128,
+  "runs": [
+   [
+    259,
+    549
+   ]
+  ],
+  "shift": 0,
+  "ext": [
+   238,
+   518,
+   46,
+   91
+  ],
+  "det": true,
+  "ext_src": "b",
+  "full": false,
+  "skfrac": 0.29888888888888887,
+  "fname": null,
+  "label": "tedashi",
+  "ext_used": [
+   238,
+   518,
+   46,
+   91
+  ],
+  "img": "results/sample2_x264/events3/ev39_t308_tedashi_b306_a313.png"
+ }
+]

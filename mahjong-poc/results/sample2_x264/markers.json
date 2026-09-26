@@ -1,0 +1,197 @@
+[
+ {
+  "t": 22.288933333333333,
+  "label": "tedashi",
+  "player": "self"
+ },
+ {
+  "t": 28.16146666666667,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 32.16546666666667,
+  "label": "opp",
+  "player": "across"
+ },
+ {
+  "t": 38.17146666666667,
+  "label": "opp",
+  "player": "left"
+ },
+ {
+  "t": 45.57886666666667,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 51.184466666666665,
+  "label": "opp",
+  "player": "across"
+ },
+ {
+  "t": 61.52813333333334,
+  "label": "tedashi",
+  "player": "self"
+ },
+ {
+  "t": 64.66460000000001,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 69.069,
+  "label": "opp",
+  "player": "across"
+ },
+ {
+  "t": 80.21346666666666,
+  "label": "tedashi",
+  "player": "self"
+ },
+ {
+  "t": 83.14973333333333,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 91.55813333333333,
+  "label": "opp",
+  "player": "left"
+ },
+ {
+  "t": 100.76733333333334,
+  "label": "tedashi",
+  "player": "self"
+ },
+ {
+  "t": 102.03526666666667,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 105.83906666666667,
+  "label": "opp",
+  "player": "across"
+ },
+ {
+  "t": 115.44866666666667,
+  "label": "tedashi",
+  "player": "self"
+ },
+ {
+  "t": 120.12,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 140.20673333333332,
+  "label": "opp",
+  "player": "across"
+ },
+ {
+  "t": 149.88306666666668,
+  "label": "tedashi",
+  "player": "self"
+ },
+ {
+  "t": 168.03453333333334,
+  "label": "tedashi",
+  "player": "self"
+ },
+ {
+  "t": 172.23873333333336,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 181.3812,
+  "label": "opp",
+  "player": "across"
+ },
+ {
+  "t": 195.92906666666667,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 210.47693333333333,
+  "label": "tedashi",
+  "player": "self"
+ },
+ {
+  "t": 212.34546666666665,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 219.48593333333335,
+  "label": "opp",
+  "player": "across"
+ },
+ {
+  "t": 227.62740000000002,
+  "label": "opp",
+  "player": "left"
+ },
+ {
+  "t": 233.56666666666666,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 240.6404,
+  "label": "opp",
+  "player": "across"
+ },
+ {
+  "t": 249.51593333333335,
+  "label": "opp",
+  "player": "left"
+ },
+ {
+  "t": 258.1245333333334,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 262.86260000000004,
+  "label": "opp",
+  "player": "across"
+ },
+ {
+  "t": 277.0768,
+  "label": "tsumogiri",
+  "player": "self"
+ },
+ {
+  "t": 279.81286666666665,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 296.02906666666667,
+  "label": "tsumogiri",
+  "player": "self"
+ },
+ {
+  "t": 297.09680000000003,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 300.9006,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 304.77113333333335,
+  "label": "opp",
+  "player": "left"
+ },
+ {
+  "t": 313.1128,
+  "label": "tedashi",
+  "player": "self"
+ }
+]
