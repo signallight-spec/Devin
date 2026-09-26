@@ -191,17 +191,21 @@ def main():
             # don't publish an empty log: it would cache a failed decode as
             # a complete pass and wipe good results from the previous run
             sys.exit(f"decoded no frames from {VIDEO}")
-        if expected > 0 and idx < 0.9 * expected:
-            print(f"warning: decoded only {idx}/{int(expected)} frames "
-                  f"(decoder stopped early); results cover ~{idx / src_fps:.0f}s",
-                  file=sys.stderr)
         # drop stale labels BEFORE publishing this video's metadata — a run
         # interrupted between here and classification must not leave an old
         # events.json beside a fresh log3.meta.json (annotate would accept it)
         if _os.path.exists("events.json"):
             _os.remove("events.json")
-        json.dump(log, open("log3.json", "w"))
-        json.dump({**ident, "src_fps": src_fps}, open("log3.meta.json", "w"))
+        if expected > 0 and idx < 0.9 * expected:
+            # truncated decode: analyse what we got but don't cache it — a
+            # rerun must re-decode (and re-warn) rather than silently reuse
+            # a partial log
+            print(f"warning: decoded only {idx}/{int(expected)} frames "
+                  f"(decoder stopped early); results cover ~{idx / src_fps:.0f}s "
+                  f"and won't be cached", file=sys.stderr)
+        else:
+            json.dump(log, open("log3.json", "w"))
+            json.dump({**ident, "src_fps": src_fps}, open("log3.meta.json", "w"))
     ts = [e["t"] for e in log]
 
     # episodes of hand in pond
