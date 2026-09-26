@@ -19,7 +19,7 @@ annotate.py renders the visualization video.
 """
 import cv2
 import numpy as np
-import json, os, sys
+import json, os, sys, statistics
 
 VIDEO = sys.argv[1] if len(sys.argv) > 1 else "videos/sample1_x264.mp4"
 FPS = 8
@@ -397,6 +397,16 @@ def main():
         tp = next((e["t"] for e in log
                    if b + 0.4 <= e["t"] < nxt and e["t"] <= b + 3
                    and e["pond"] >= pre + MIN_DELTA), None)
+        # a landed tile stays in the pond; a spike that falls back within
+        # the own window is something else (a broadcast overlay, a sleeve).
+        # Compare the level AFTER first crossing: a real discard keeps the
+        # median up, a transient spike lets it collapse back to baseline
+        # (samples jitter around the threshold, so don't demand all hold)
+        if tp is not None:
+            after = [e["pond"] for e in log
+                     if tp <= e["t"] < nxt and e["t"] <= b + 3]
+            if after and statistics.median(after) < pre + MIN_DELTA * 0.4:
+                continue
         if own - pre > MIN_DELTA:
             events.append({"t": (a + b) / 2, "t0": a, "t1": b,
                            "delta": own - pre, "sure": True, "tp": tp})

@@ -709,43 +709,5 @@
   "round": 0,
   "player": "left",
   "label": "opp"
- },
- {
-  "t": 308.24126666666666,
-  "t0": 308.04106666666667,
-  "t1": 308.44146666666666,
-  "delta": 3731,
-  "sure": true,
-  "tp": 309.5092,
-  "round": 0,
-  "player": "self",
-  "tb": 306.1725333333333,
-  "ta": 313.1128,
-  "runs": [
-   [
-    259,
-    549
-   ]
-  ],
-  "shift": 0,
-  "ext": [
-   238,
-   518,
-   46,
-   91
-  ],
-  "det": true,
-  "ext_src": "b",
-  "full": false,
-  "skfrac": 0.29888888888888887,
-  "fname": null,
-  "label": "tedashi",
-  "ext_used": [
-   238,
-   518,
-   46,
-   91
-  ],
-  "img": "results/sample2_x264/events3/ev39_t308_tedashi_b306_a313.png"
  }
 ]
