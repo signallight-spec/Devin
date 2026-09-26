@@ -459,6 +459,10 @@ def main():
             results.append({**ev, "label": "noisy"}); continue
         tb, ta = befs[-1], afts[0]
         fb, fa = frame(tb), frame(ta)
+        # a reread can fail near a decode-stopping truncation even though
+        # the sequential pass got the frame — keep the other results
+        if fb is None or fa is None:
+            results.append({**ev, "label": "noisy"}); continue
         bb, aa = band(fb), band(fa)
         det = band_extent(bb)
         det_src = "b"

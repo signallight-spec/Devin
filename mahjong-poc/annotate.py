@@ -102,7 +102,10 @@ def main():
     for i, ev in enumerate(events):
         # keep a placeholder for unclassified discards: a cell position IS
         # the discard index, so skipping would shift every later discard
-        marks.append({"t": ev.get("ta", ev["t"]), "label": ev["label"],
+        # display time = just after the discard lands (t1). ta is only
+        # classification evidence and can fall past a sweep start, which
+        # would hide the discard entirely
+        marks.append({"t": ev["t1"] + 0.4, "label": ev["label"],
                       "player": ev.get("player", "self")})
     print(f"{len(marks)} cells")
 
