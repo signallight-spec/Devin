@@ -57,6 +57,10 @@ def main():
     if not (meta and meta.get("video") == VIDEO and meta.get("size") == st.st_size
             and meta.get("mtime") == st.st_mtime_ns):
         sys.exit(f"results were generated for another video; run pipeline3.py on {VIDEO} first")
+    if meta.get("partial"):
+        print("warning: feature log is from a truncated decode — sweep "
+              "detection past the truncation point may be incomplete",
+              file=sys.stderr)
     if not os.path.exists("events.json"):
         sys.exit("events.json is missing or stale (pipeline3.py was interrupted); rerun it first")
     events = json.load(open("events.json"))

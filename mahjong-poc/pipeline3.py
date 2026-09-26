@@ -161,7 +161,11 @@ def main():
     meta = None
     if _os.path.exists("log3.meta.json") and _os.path.exists("log3.json"):
         meta = json.load(open("log3.meta.json"))
-    cached = meta is not None and all(meta.get(k) == v for k, v in ident.items())
+    # a 'partial' meta means the decode stopped early: it pairs with the
+    # events written that run so annotate can render them, but it never
+    # serves as a cache — every rerun re-decodes until completion
+    cached = (meta is not None and not meta.get("partial")
+              and all(meta.get(k) == v for k, v in ident.items()))
     if cached:
         log = json.load(open("log3.json"))
         src_fps = meta["src_fps"]
@@ -196,16 +200,14 @@ def main():
         # events.json beside a fresh log3.meta.json (annotate would accept it)
         if _os.path.exists("events.json"):
             _os.remove("events.json")
-        if expected > 0 and idx < 0.9 * expected:
-            # truncated decode: analyse what we got but don't cache it — a
-            # rerun must re-decode (and re-warn) rather than silently reuse
-            # a partial log
+        partial = expected > 0 and idx < 0.9 * expected
+        if partial:
             print(f"warning: decoded only {idx}/{int(expected)} frames "
-                  f"(decoder stopped early); results cover ~{idx / src_fps:.0f}s "
-                  f"and won't be cached", file=sys.stderr)
-        else:
-            json.dump(log, open("log3.json", "w"))
-            json.dump({**ident, "src_fps": src_fps}, open("log3.meta.json", "w"))
+                  f"(decoder stopped early); results cover ~{idx / src_fps:.0f}s",
+                  file=sys.stderr)
+        json.dump(log, open("log3.json", "w"))
+        json.dump({**ident, "src_fps": src_fps, "partial": bool(partial)},
+                  open("log3.meta.json", "w"))
     ts = [e["t"] for e in log]
 
     # episodes of hand in pond
