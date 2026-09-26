@@ -111,6 +111,10 @@ def main():
         oy = 8
         for key, title in PLAYERS:
             cells = [m["label"] for m in placed if m["player"] == key]
+            # the unknown table sits lowest and would dim the near player's
+            # hand band even when empty — only draw it when it has cells
+            if key == "unknown" and not cells:
+                continue
             draw_table(img, cells, 15, oy, title)
             oy += (4 if len(cells) > 18 else 3) * CELL_H + 26 + 8
             if key == "self":

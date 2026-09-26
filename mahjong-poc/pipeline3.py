@@ -185,11 +185,16 @@ def main():
                         "pond": pond_area(img),
                         "skin_hand": float(sm[y0:y1, x0:x1].mean()),
                         "skin_pond": float(sm[R_POND[1]:R_POND[3], R_POND[0]:R_POND[2]].mean())})
+        expected = cap.get(cv2.CAP_PROP_FRAME_COUNT)
         cap.release()
         if not log:
             # don't publish an empty log: it would cache a failed decode as
             # a complete pass and wipe good results from the previous run
             sys.exit(f"decoded no frames from {VIDEO}")
+        if expected > 0 and idx < 0.9 * expected:
+            print(f"warning: decoded only {idx}/{int(expected)} frames "
+                  f"(decoder stopped early); results cover ~{idx / src_fps:.0f}s",
+                  file=sys.stderr)
         # drop stale labels BEFORE publishing this video's metadata — a run
         # interrupted between here and classification must not leave an old
         # events.json beside a fresh log3.meta.json (annotate would accept it)
