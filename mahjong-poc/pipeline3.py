@@ -13,7 +13,8 @@ Method:
        right-end loss     -> TSUMOGIRI (drawn tile conventionally at right end)
      Opponent rows are outside the hand band, so opponent events are kept
      as unclassifiable 'opp' marks rather than risking a false label.
-Outputs: events.json and before/after contact images in events3/;
+Outputs land under results/<video-stem>/: log3.json, log3.meta.json,
+events.json, markers.json, events3/*.png (several videos' results coexist);
 annotate.py renders the visualization video.
 """
 import cv2
@@ -22,13 +23,47 @@ import json, os, sys
 
 VIDEO = sys.argv[1] if len(sys.argv) > 1 else "videos/sample1_x264.mp4"
 FPS = 8
-R_POND = (600, 390, 990, 500)
-R_HAND = (170, 545, 1240, 660)   # band incl. standing row (top ~45px) + melds below
+
+# Per-video geometry profiles. Keys match against the video basename.
+# 'default' = over-shoulder single-table view; 'sample2' = split screen
+# with a top-down whole-table panel on the left and the near player's
+# face-up hand inset at bottom right.
+PROFILES = {
+    "sample2": dict(
+        R_POND=(180, 250, 500, 640),   # inner table area of the left panel
+        R_HAND=(660, 480, 1280, 710),  # near player's face-up hand inset
+        SKIN_POND_TH=0.035,            # a hand is a small % of the big region
+        MIN_DELTA=300,                 # one top-down tile ~= 700 bright px
+        ATTRIB="sector",               # discard lands in discarder's sector
+        # centroid anchors of each seat's discard cluster (frame coords)
+        ANCHORS={"across": (335, 295), "right": (420, 380),
+                 "left": (230, 380), "self": (340, 485)},
+        PANEL=(8, 80, 650, 710),       # left panel bounds for edge fallback
+        # wall strips (frame coords): an automatic table swallows all tiles
+        # between hands, so all walls read empty at once = round transition
+        WALLS=[(150, 120, 540, 190), (55, 200, 115, 560),
+               (560, 200, 650, 560)],
+    ),
+}
+
+_name = os.path.basename(VIDEO)
+_prof = next((p for k, p in PROFILES.items() if k in _name), {})
+PROF_KEY = next((k for k in PROFILES if k in _name), "default")
+
+R_POND = _prof.get("R_POND", (600, 390, 990, 500))
+R_HAND = _prof.get("R_HAND", (170, 545, 1240, 660))  # standing row + melds
 ROW_STRIP = 35                    # top rows of band = standing hand; meld changes ignored
-MIN_DELTA = 900                  # pond growth px for one tile
+MIN_DELTA = _prof.get("MIN_DELTA", 900)  # pond growth px for one tile
+SKIN_POND_TH = _prof.get("SKIN_POND_TH", 0.25)  # skin fraction = hand in pond
+ATTRIB = _prof.get("ATTRIB", "edges")
+ANCHORS = _prof.get("ANCHORS")
+PANEL = _prof.get("PANEL")
+WALLS = _prof.get("WALLS")        # wall strips; all-empty => round transition
 EP_GAP = 1.5
 SKIN = (2, 24, 45, 165, 110)     # h_lo, h_hi, s_lo, s_hi, v_lo for skin_mask
 POND_T = (150, 70)               # v_min, s_max for pond_area white tiles
+WALL_TH = 0.01                   # yellow fraction below which a wall is empty
+SWEEP_MIN = 5                    # seconds of empty walls = a transition
 
 def skin_mask(img):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -41,6 +76,26 @@ def pond_area(img):
     h, s, v = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
     m = (v > POND_T[0]) & (s < POND_T[1])
     return int(m[y0:y1, x0:x1].sum())
+
+def walls_frac(img):
+    """Peak yellow-wall coverage across the wall strips — drops to ~0 only
+    when the table has swallowed every wall between rounds."""
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    h, s, v = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+    yel = (h > 10) & (h < 40) & (s > 80) & (v > 100)
+    return max(float(yel[y0:y1, x0:x1].mean()) for x0, y0, x1, y1 in WALLS)
+
+def wall_sweeps(log):
+    """Round-transition intervals: contiguous runs where every wall strip
+    reads empty."""
+    spans, cur = [], None
+    for e in log:
+        if e.get("walls", 1.0) < WALL_TH:
+            cur = [e["t"], e["t"]] if cur is None else [cur[0], e["t"]]
+        else:
+            if cur: spans.append(cur); cur = None
+    if cur: spans.append(cur)
+    return [s for s in spans if s[1] - s[0] > SWEEP_MIN]
 
 def band(img):
     x0, y0, x1, y1 = R_HAND
@@ -110,14 +165,51 @@ def align_diff(bb, aa):
     return dimg
 
 def attribute_player(cap, ev, log, src_fps):
-    """Vote which seat the discarding hand belongs to. The skin component
-    overlapping R_POND is traced to the frame edge it exits through:
-      bottom edge, or right edge below y~400 -> 'self'   (near player: the
-        arm hangs to the bottom-right corner / low right edge)
-      right edge higher                      -> 'right'  (horizontal reach)
-      top or left edge                       -> 'across'
-    Several hands can be in the pond at once (each component votes).
-    Returns 'self' | 'across' | 'right' | 'unknown'."""
+    """Vote which seat the discarding hand belongs to.
+
+    'sector' (overhead camera): the discard lands in the discarder's own
+    pond sector. Diff the pond between just before and just after the
+    episode, keep bright components that newly appeared, and assign each
+    to the nearest sector anchor — largest area wins.
+
+    'edges' (over-shoulder camera): the skin component touching the pond
+    is followed to the frame edge it exits through."""
+    if ATTRIB == "sector":
+        def fr2(t):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(round(t * src_fps)))
+            ok, im = cap.read()
+            return im if ok else None
+        fb, fa = fr2(ev["t0"] - 0.4), fr2(ev["t1"] + 0.8)
+        if fb is None or fa is None:
+            return "unknown"
+        x0, y0, x1, y1 = R_POND
+        gb = cv2.cvtColor(fb, cv2.COLOR_BGR2GRAY)[y0:y1, x0:x1].astype(int)
+        ga = cv2.cvtColor(fa, cv2.COLOR_BGR2GRAY)[y0:y1, x0:x1].astype(int)
+        hsv = cv2.cvtColor(fa, cv2.COLOR_BGR2HSV)
+        wa = ((hsv[:, :, 2] > POND_T[0]) & (hsv[:, :, 1] < POND_T[1]))[y0:y1, x0:x1]
+        newt = ((np.abs(gb - ga) > 50) & wa).astype(np.uint8)
+        newt = cv2.morphologyEx(newt, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+        n, lab, st, cen = cv2.connectedComponentsWithStats(newt)
+        votes = {}
+        for i in range(1, n):
+            if st[i, 4] < 120:   # smaller than ~half a tile face: noise
+                continue
+            cx, cy = cen[i][0] + x0, cen[i][1] + y0
+            seat = min(ANCHORS, key=lambda k: (cx - ANCHORS[k][0]) ** 2
+                                              + (cy - ANCHORS[k][1]) ** 2)
+            votes[seat] = votes.get(seat, 0) + int(st[i, 4])
+        if votes:
+            return max(votes, key=votes.get)
+        # the tile may be hidden by the hovering hand: fall back to which
+        # panel edge the pond-touching skin component exits through
+        return _panel_edge_vote(cap, ev, log, src_fps)
+    # 'edges' mode: the skin component overlapping R_POND is traced to the
+    # frame edge it exits through:
+    #   bottom edge, or right edge below y~400 -> 'self'   (near player: the
+    #     arm hangs to the bottom-right corner / low right edge)
+    #   right edge higher                      -> 'right'  (horizontal reach)
+    #   top or left edge                       -> 'across'
+    # Several hands can be in the pond at once (each component votes).
     kr = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
     px0, py0, px1, py1 = R_POND
     votes = {"self": 0, "across": 0, "right": 0}
@@ -151,23 +243,75 @@ def attribute_player(cap, ev, log, src_fps):
         return "right"
     return "unknown"
 
+
+def _panel_edge_vote(cap, ev, log, src_fps):
+    """Overhead-camera fallback: per sampled frame, only the skin component
+    reaching DEEPEST into the pond votes for its nearest panel edge — the
+    discarder's arm extends to the table's centre while other players'
+    resting hands hug the rim, so they lose each frame they share. Edge
+    contact alone can't be trusted (sleeves break the skin mask before
+    the edge is reached); nearest-edge by bounding box is."""
+    px0, py0, px1, py1 = PANEL
+    kr = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    votes = {"across": 0, "self": 0, "left": 0, "right": 0}
+    for e in log:
+        if not (ev["t0"] <= e["t"] <= ev["t1"] + 0.5):
+            continue
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(round(e["t"] * src_fps)))
+        ok, im = cap.read()
+        if not ok:
+            continue
+        mask = np.zeros(im.shape[:2], np.uint8)
+        mask[py0:py1, px0:px1] = skin_mask(im)[py0:py1, px0:px1]
+        mask = cv2.dilate(mask, kr)
+        n, lab = cv2.connectedComponents(mask)
+        ids = np.unique(lab[R_POND[1]:R_POND[3], R_POND[0]:R_POND[2]])
+        best = None  # (inside, edge)
+        for cid in ids[ids > 0]:
+            ys, xs = np.where(lab == cid)
+            if len(ys) < 800:
+                continue
+            inside = int(((ys >= R_POND[1]) & (ys < R_POND[3])
+                          & (xs >= R_POND[0]) & (xs < R_POND[2])).sum())
+            if inside < 400:
+                continue
+            gaps = {"across": ys.min() - py0, "self": py1 - ys.max(),
+                    "left": xs.min() - px0, "right": px1 - xs.max()}
+            edge = min(gaps, key=gaps.get)
+            if best is None or inside > best[0]:
+                best = (inside, edge)
+        if best:
+            # weight by penetration depth: the discarder's arm outmasses a
+            # resting rim-hand only around the actual discard moment, so a
+            # plain 1-vote-per-frame majority lets persistent hands win
+            votes[best[1]] += best[0]
+    return max(votes, key=votes.get) if any(votes.values()) else "unknown"
+
 def main():
     import os as _os
+    STEM = _os.path.splitext(_os.path.basename(VIDEO))[0]
+    OUTDIR = _os.path.join("results", STEM)
+    _os.makedirs(OUTDIR, exist_ok=True)
+    F_LOG = _os.path.join(OUTDIR, "log3.json")
+    F_META = _os.path.join(OUTDIR, "log3.meta.json")
+    F_EVENTS = _os.path.join(OUTDIR, "events.json")
+    D_EV = _os.path.join(OUTDIR, "events3")
     _st = _os.stat(VIDEO)
     # cache identity covers every input that changes the feature log: the
     # video, the sampled regions/rate, and the detector thresholds
     ident = {"video": VIDEO, "size": _st.st_size, "mtime": _st.st_mtime_ns,
-             "cfg": f"{R_POND}|{R_HAND}|{FPS}|skin={SKIN}|pond={POND_T}"}
+             "cfg": f"{PROF_KEY}|{R_POND}|{R_HAND}|{FPS}|skin={SKIN}|pond={POND_T}"
+             f"|skinpond={SKIN_POND_TH}|mindelta={MIN_DELTA}|walls={WALLS}"}
     meta = None
-    if _os.path.exists("log3.meta.json") and _os.path.exists("log3.json"):
-        meta = json.load(open("log3.meta.json"))
+    if _os.path.exists(F_META) and _os.path.exists(F_LOG):
+        meta = json.load(open(F_META))
     # a 'partial' meta means the decode stopped early: it pairs with the
     # events written that run so annotate can render them, but it never
     # serves as a cache — every rerun re-decodes until completion
     cached = (meta is not None and not meta.get("partial")
               and all(meta.get(k) == v for k, v in ident.items()))
     if cached:
-        log = json.load(open("log3.json"))
+        log = json.load(open(F_LOG))
         src_fps = meta["src_fps"]
     else:
         cap = cv2.VideoCapture(VIDEO)
@@ -185,10 +329,13 @@ def main():
             if not ok: break
             x0, y0, x1, y1 = R_HAND
             sm = skin_mask(img)
-            log.append({"t": idx / src_fps,
-                        "pond": pond_area(img),
-                        "skin_hand": float(sm[y0:y1, x0:x1].mean()),
-                        "skin_pond": float(sm[R_POND[1]:R_POND[3], R_POND[0]:R_POND[2]].mean())})
+            entry = {"t": idx / src_fps,
+                     "pond": pond_area(img),
+                     "skin_hand": float(sm[y0:y1, x0:x1].mean()),
+                     "skin_pond": float(sm[R_POND[1]:R_POND[3], R_POND[0]:R_POND[2]].mean())}
+            if WALLS:
+                entry["walls"] = walls_frac(img)
+            log.append(entry)
         expected = cap.get(cv2.CAP_PROP_FRAME_COUNT)
         cap.release()
         if not log:
@@ -198,22 +345,22 @@ def main():
         # drop stale labels BEFORE publishing this video's metadata — a run
         # interrupted between here and classification must not leave an old
         # events.json beside a fresh log3.meta.json (annotate would accept it)
-        if _os.path.exists("events.json"):
-            _os.remove("events.json")
+        if _os.path.exists(F_EVENTS):
+            _os.remove(F_EVENTS)
         partial = expected > 0 and idx < 0.9 * expected
         if partial:
             print(f"warning: decoded only {idx}/{int(expected)} frames "
                   f"(decoder stopped early); results cover ~{idx / src_fps:.0f}s",
                   file=sys.stderr)
-        json.dump(log, open("log3.json", "w"))
+        json.dump(log, open(F_LOG, "w"))
         json.dump({**ident, "src_fps": src_fps, "partial": bool(partial)},
-                  open("log3.meta.json", "w"))
+                  open(F_META, "w"))
     ts = [e["t"] for e in log]
 
     # episodes of hand in pond
     eps, cur = [], None
     for e in log:
-        if e["skin_pond"] > 0.25:
+        if e["skin_pond"] > SKIN_POND_TH:
             if cur is None: cur = [e["t"], e["t"]]
             else: cur[1] = e["t"]
         else:
@@ -253,14 +400,14 @@ def main():
 
     # pass 2: classify each event via band diff
     cap = cv2.VideoCapture(VIDEO)
-    os.makedirs("events3", exist_ok=True)
-    for _f in os.listdir("events3"):  # drop stale evidence from earlier runs
-        os.remove(os.path.join("events3", _f))
+    os.makedirs(D_EV, exist_ok=True)
+    for _f in os.listdir(D_EV):  # drop stale evidence from earlier runs
+        os.remove(os.path.join(D_EV, _f))
     # stale labels were already dropped before the metadata write; repeat
     # here so a run on a cached log can't be interrupted mid-classify with
     # the old file still on disk
-    if _os.path.exists("events.json"):
-        _os.remove("events.json")
+    if _os.path.exists(F_EVENTS):
+        _os.remove(F_EVENTS)
     def frame(t):
         cap.set(cv2.CAP_PROP_POS_FRAMES, int(round(t * src_fps)))
         ok, im = cap.read()
@@ -273,9 +420,12 @@ def main():
         # fall back to least-occluded frame in the window
         return [min(cand, key=lambda e: e["skin_hand"])["t"]] if cand else []
 
-    # the row's bounds reset at every deal/transition (long skin episode):
-    # an extent inherited across that boundary belongs to the previous round
-    sweep_ends = [b for a, b in merged if b - a > 8]
+    # the row's bounds reset at every deal/transition. Overhead profiles
+    # detect transitions by the walls emptying; shoulder-view profiles by
+    # the long merged skin-in-pond episode of the sweep itself
+    sweeps = wall_sweeps(log) if WALLS else [m for m in merged
+                                           if m[1] - m[0] > 8]
+    sweep_ends = [b for a, b in sweeps]
     for ev in events:
         ev["round"] = bisect.bisect_right(sweep_ends, ev["t0"])
 
@@ -413,7 +563,8 @@ def main():
         r["label"] = label
         r["ext_used"] = ext2
         mid = r["t"]
-        fname = f"events3/ev{i:02d}_t{mid:.0f}_{label}_b{r['tb']:.0f}_a{r['ta']:.0f}.png"
+        fname = (f"{D_EV}/ev{i:02d}_t{mid:.0f}_{label}"
+                 f"_b{r['tb']:.0f}_a{r['ta']:.0f}.png")
         cv2.imwrite(fname, np.vstack([r.pop("bb"), r.pop("aa")]))
         r["img"] = fname
     # an ambiguous event (growth only seen once the next episode started)
@@ -422,10 +573,10 @@ def main():
     results = [r for r in results
                if r.get("sure", True) or r["label"] == "tedashi"]
     kept = {r["img"] for r in results if r.get("img")}
-    for _f in os.listdir("events3"):  # evidence only for kept events
-        if os.path.join("events3", _f) not in kept:
-            os.remove(os.path.join("events3", _f))
-    json.dump(results, open("events.json", "w"), indent=1)
+    for _f in os.listdir(D_EV):  # evidence only for kept events
+        if os.path.join(D_EV, _f) not in kept:
+            os.remove(os.path.join(D_EV, _f))
+    json.dump(results, open(F_EVENTS, "w"), indent=1)
     for r in results:
         print(f"  t={r['t']:6.1f}  {r['label']:10s} player={r.get('player','?'):7s} "
               f"runs={r.get('runs')} img={r.get('img','-')}")
