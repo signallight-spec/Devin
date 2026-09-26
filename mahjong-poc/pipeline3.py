@@ -377,6 +377,13 @@ def main():
         cands = [log[j]["pond"] for j in range(max(0, i-1), min(len(log), i+3))]
         return max(cands) if cands else 0
 
+    # the long merged skin-in-pond episode of the sweep itself marks a
+    # transition for shoulder-view videos; overhead profiles detect it by
+    # the walls emptying instead
+    sweeps = wall_sweeps(log) if WALLS else [m for m in merged
+                                           if m[1] - m[0] > 8]
+    sweep_starts = [a for a, _b in sweeps]
+
     events = []
     for mi, (a, b) in enumerate(merged):
         if b - a > 8:  # deal/transition phase, skip
@@ -401,10 +408,13 @@ def main():
         # the own window is something else (a broadcast overlay, a sleeve).
         # Compare the level AFTER first crossing: a real discard keeps the
         # median up, a transient spike lets it collapse back to baseline
-        # (samples jitter around the threshold, so don't demand all hold)
+        # (samples jitter around the threshold, so don't demand all hold).
+        # Only samples before the next detected clearing count — a call
+        # pickup or a round sweep legitimately empties the pond afterwards
         if tp is not None:
-            after = [e["pond"] for e in log
-                     if tp <= e["t"] < nxt and e["t"] <= b + 3]
+            end = min(nxt, b + 3,
+                      next((s for s in sweep_starts if s > tp), b + 3))
+            after = [e["pond"] for e in log if tp <= e["t"] < end]
             if after and statistics.median(after) < pre + MIN_DELTA * 0.4:
                 continue
         if own - pre > MIN_DELTA:
@@ -437,11 +447,8 @@ def main():
         # fall back to least-occluded frame in the window
         return [min(cand, key=lambda e: e["skin_hand"])["t"]] if cand else []
 
-    # the row's bounds reset at every deal/transition. Overhead profiles
-    # detect transitions by the walls emptying; shoulder-view profiles by
-    # the long merged skin-in-pond episode of the sweep itself
-    sweeps = wall_sweeps(log) if WALLS else [m for m in merged
-                                           if m[1] - m[0] > 8]
+    # the row's bounds reset at every deal/transition (sweeps computed
+    # above)
     sweep_ends = [b for a, b in sweeps]
     for ev in events:
         ev["round"] = bisect.bisect_right(sweep_ends, ev["t0"])
