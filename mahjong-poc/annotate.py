@@ -13,8 +13,11 @@ R_HAND = (170, 545, 1240, 660)
 CELL_W, CELL_H = 46, 40
 
 LEGEND = {"tedashi": (0, 0, 255), "tsumogiri": (255, 200, 0), "tsumogiri?": (200, 200, 0)}
-# display order mirrors the table: across seat at top, self at bottom
-PLAYERS = [("across", "across"), ("right", "right"), ("self", "near player")]
+# display order mirrors the table: across seat at top, self at bottom.
+# 'unknown' gets its own table — borrowing a seat's table would consume a
+# cell position and shift that seat's real discards (cells ARE order)
+PLAYERS = [("across", "across"), ("right", "right"),
+           ("self", "near player"), ("unknown", "unknown")]
 
 
 def draw_table(img, cells, ox, oy, title):
@@ -60,12 +63,9 @@ def main():
     marks = []  # (t_shown, label, player) — table cells fill in discard order
     for i, ev in enumerate(events):
         # keep a placeholder for unclassified discards: a cell position IS
-        # the discard index, so skipping would shift every later discard.
-        # 'unknown' attribution lands in the across table — with no edge
-        # contact the most likely source is the player reaching from the top
-        p = ev.get("player", "self")
+        # the discard index, so skipping would shift every later discard
         marks.append({"t": ev.get("ta", ev["t"]), "label": ev["label"],
-                      "player": "across" if p == "unknown" else p})
+                      "player": ev.get("player", "self")})
     print(f"{len(marks)} cells")
 
     # sweep intervals = long merged skin-in-pond episodes (deal/transition)

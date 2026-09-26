@@ -167,6 +167,8 @@ def main():
         src_fps = meta["src_fps"]
     else:
         cap = cv2.VideoCapture(VIDEO)
+        if not cap.isOpened():
+            sys.exit(f"cannot open video: {VIDEO}")
         src_fps = cap.get(cv2.CAP_PROP_FPS) or 60
         step = max(1, int(round(src_fps / FPS)))
         log, idx = [], 0
@@ -184,6 +186,15 @@ def main():
                         "skin_hand": float(sm[y0:y1, x0:x1].mean()),
                         "skin_pond": float(sm[R_POND[1]:R_POND[3], R_POND[0]:R_POND[2]].mean())})
         cap.release()
+        if not log:
+            # don't publish an empty log: it would cache a failed decode as
+            # a complete pass and wipe good results from the previous run
+            sys.exit(f"decoded no frames from {VIDEO}")
+        # drop stale labels BEFORE publishing this video's metadata — a run
+        # interrupted between here and classification must not leave an old
+        # events.json beside a fresh log3.meta.json (annotate would accept it)
+        if _os.path.exists("events.json"):
+            _os.remove("events.json")
         json.dump(log, open("log3.json", "w"))
         json.dump({**ident, "src_fps": src_fps}, open("log3.meta.json", "w"))
     ts = [e["t"] for e in log]
@@ -234,8 +245,9 @@ def main():
     os.makedirs("events3", exist_ok=True)
     for _f in os.listdir("events3"):  # drop stale evidence from earlier runs
         os.remove(os.path.join("events3", _f))
-    # clear stale labels up front: if this run is interrupted mid-classify,
-    # annotate must not pair them with freshly-written log metadata
+    # stale labels were already dropped before the metadata write; repeat
+    # here so a run on a cached log can't be interrupted mid-classify with
+    # the old file still on disk
     if _os.path.exists("events.json"):
         _os.remove("events.json")
     def frame(t):
