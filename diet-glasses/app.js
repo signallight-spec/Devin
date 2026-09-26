@@ -27,6 +27,12 @@ const FOODS = [
   { prompt: 'a photo of french fries',                  name: 'フライドポテト (1人前)', kcal: 350 },
   { prompt: 'a photo of fruit',                         name: 'フルーツ (1人前)',    kcal: 100 },
   { prompt: 'a photo of a soft drink',                  name: 'ジュース (1杯)',      kcal: 150 },
+  { prompt: 'a photo of okonomiyaki savory pancake',    name: 'お好み焼き (1枚)',    kcal: 550 },
+  { prompt: 'a photo of takoyaki octopus balls',        name: 'たこ焼き (6個)',      kcal: 400 },
+  { prompt: 'a photo of soba buckwheat noodles',        name: 'そば (1杯)',          kcal: 400 },
+  { prompt: 'a photo of a bowl of miso soup',           name: '味噌汁 (1杯)',        kcal: 50 },
+  { prompt: 'a photo of a bowl of white rice',          name: 'ご飯 (1膳)',          kcal: 250 },
+  { prompt: 'a photo of grilled fish',                  name: '焼き魚 (1切れ)',      kcal: 200 },
 ];
 
 const NON_FOOD = [
@@ -46,6 +52,7 @@ const LABELS = [...FOODS.map(f => f.prompt), ...NON_FOOD];
 const FOOD_BY_PROMPT = new Map(FOODS.map(f => [f.prompt, f]));
 
 const CONF_THRESHOLD = 0.35;   // minimum score to treat top food label as a detection
+const FOOD_MARGIN    = 0.15;   // top food must beat the best non-food label by this much
 const STABLE_FRAMES  = 2;      // consecutive identical detections required to auto-log
 const LOG_COOLDOWN_MS = 90_000;
 const SCAN_MS = 1400;
@@ -263,7 +270,7 @@ async function scan() {
         debugTop.appendChild(li);
       }
     }
-    handleResult(out[0]);
+    handleResult(out);
   } catch (e) {
     console.error('classify error', e);
   } finally {
@@ -271,11 +278,16 @@ async function scan() {
   }
 }
 
-function handleResult(top) {
-  const food = top.score >= CONF_THRESHOLD ? FOOD_BY_PROMPT.get(top.label) : null;
+function handleResult(out) {
+  const bestFood = out.find(r => FOOD_BY_PROMPT.has(r.label));
+  const bestOther = out.find(r => !FOOD_BY_PROMPT.has(r.label));
+  const food = bestFood && bestFood.score >= CONF_THRESHOLD &&
+               bestFood.score - (bestOther ? bestOther.score : 0) >= FOOD_MARGIN
+    ? FOOD_BY_PROMPT.get(bestFood.label)
+    : null;
   if (food && food.prompt === lastLabel) streak++;
   else { lastLabel = food ? food.prompt : null; streak = food ? 1 : 0; }
-  currentFood = food ? { ...food, score: top.score } : null;
+  currentFood = food ? { ...food, score: bestFood.score } : null;
   renderDetection();
 
   if (autoLog && food && streak >= STABLE_FRAMES) {
