@@ -98,17 +98,6 @@ def main():
     if not os.path.exists(F_EVENTS):
         sys.exit("events.json is missing or stale (pipeline3.py was interrupted); rerun it first")
     events = json.load(open(F_EVENTS))
-    marks = []  # (t_shown, label, player) — table cells fill in discard order
-    for i, ev in enumerate(events):
-        # keep a placeholder for unclassified discards: a cell position IS
-        # the discard index, so skipping would shift every later discard
-        # display time = just after the discard lands (t1). ta is only
-        # classification evidence and can fall past a sweep start, which
-        # would hide the discard entirely
-        marks.append({"t": ev["t1"] + 0.4, "label": ev["label"],
-                      "player": ev.get("player", "self")})
-    print(f"{len(marks)} cells")
-
     log = json.load(open(F_LOG))
     if WALLS:
         # overhead profile: transitions show as all wall strips empty
@@ -140,6 +129,22 @@ def main():
         # be emitted as an event yet cleared here as a transition
         SWEEPS = [m for m in merged if m[1] - m[0] > 8]
     print("sweep intervals:", [[round(a, 1), round(b, 1)] for a, b in SWEEPS])
+
+    marks = []  # (t_shown, label, player) — table cells fill in discard order
+    for i, ev in enumerate(events):
+        # keep a placeholder for unclassified discards: a cell position IS
+        # the discard index, so skipping would shift every later discard
+        # display time = the pond sample that proved the tile landed (tp);
+        # ambiguous events fall back to just after the episode. A mark
+        # landing inside the round-clearing sweep is pulled just before
+        # the sweep so it still records to the round it belongs to
+        t_show = ev.get("tp") or ev["t1"] + 0.4
+        nxt_sweep = next((a for a, _b in SWEEPS if a > ev["t1"]), None)
+        if nxt_sweep is not None:
+            t_show = min(t_show, max(ev["t1"] + 0.2, nxt_sweep - 0.5))
+        marks.append({"t": t_show, "label": ev["label"],
+                      "player": ev.get("player", "self")})
+    print(f"{len(marks)} cells")
 
     cap = cv2.VideoCapture(VIDEO)
     fps = cap.get(cv2.CAP_PROP_FPS) or 60
