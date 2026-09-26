@@ -66,6 +66,10 @@ const hudFood = el('hud-food'), foodName = el('foodName'), foodKcal = el('foodKc
       foodConf = el('foodConf'), logBtn = el('logBtn');
 const totalText = el('totalText'), progressFill = el('progressFill');
 const vignette = el('vignette'), stamp = el('stamp'), stampFood = el('stampFood');
+const debugBtn = el('debugBtn'), debugHud = el('debugHud'),
+      debugCap = el('debugCap'), debugTop = el('debugTop');
+debugCap.width = debugCap.height = 384;
+const debugCapCtx = debugCap.getContext('2d');
 const panel = el('panel'), logList = el('logList');
 const limitInput = el('limitInput'), autoLogChk = el('autoLog');
 const toast = el('toast');
@@ -249,6 +253,16 @@ async function scan() {
   try {
     const out = await classifier(frame, LABELS, { hypothesis_template: '{}' });
     out.sort((a, b) => b.score - a.score);
+    if (!debugHud.hidden) {
+      debugCapCtx.drawImage(cap, 0, 0);
+      debugTop.innerHTML = '';
+      for (const r of out.slice(0, 3)) {
+        const li = document.createElement('li');
+        const f = FOOD_BY_PROMPT.get(r.label);
+        li.textContent = `${(r.score * 100).toFixed(0)}% ${f ? f.name : r.label.replace(/^a (close-up |selfie )?photo( of)?( a)? /, '')}`;
+        debugTop.appendChild(li);
+      }
+    }
     handleResult(out[0]);
   } catch (e) {
     console.error('classify error', e);
@@ -316,6 +330,7 @@ function stopDemo() { clearInterval(demoTimer); demoTimer = null; }
 // ---------- events ----------
 
 el('srcBtn').onclick = () => (mode === 'camera' ? startDemo() : startCamera());
+debugBtn.onclick = () => { debugHud.hidden = !debugHud.hidden; };
 el('panelBtn').onclick = () => { panel.hidden = !panel.hidden; renderLog(); };
 el('panelClose').onclick = () => { panel.hidden = true; };
 logBtn.onclick = () => {
