@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>やせる眼鏡 - Diet Glasses Prototype</title>
+<link rel="stylesheet" href="styles.css?v=3">
+</head>
+<body>
+  <main id="stage">
+    <video id="cam" autoplay playsinline muted></video>
+    <img id="demoImg" alt="" hidden>
+    <canvas id="cap" hidden></canvas>
+
+    <div id="vignette"></div>
+
+    <div id="stamp" hidden>
+      <div class="stamp-circle">禁止</div>
+      <div id="stampFood"></div>
+    </div>
+
+    <header id="hud-top">
+      <div class="brand">👓 やせる眼鏡 <span class="proto">PROTOTYPE</span></div>
+      <div class="controls">
+        <button id="srcBtn" title="カメラ / デモ切替">🎞 デモ</button>
+        <button id="debugBtn" title="認識中の画像を表示">🔍</button>
+        <button id="panelBtn" title="設定・ログ">⚙</button>
+      </div>
+    </header>
+
+    <div id="modelStatus">AIモデルを読み込み中…</div>
+
+    <div id="warnBanner" hidden></div>
+
+    <section id="hud-food" hidden>
+      <div id="foodInfo">
+        <span id="foodName">—</span>
+        <span id="foodKcal"></span>
+        <span id="foodConf"></span>
+      </div>
+      <button id="logBtn">この食べ物を記録</button>
+    </section>
+
+    <div id="debugHud" hidden>
+      <canvas id="debugCap"></canvas>
+      <ol id="debugTop"></ol>
+    </div>
+
+    <footer id="hud-total">
+      <div class="total-row">
+        <span>今日の摂取カロリー</span>
+        <span id="totalText">0 / 2000 kcal</span>
+      </div>
+      <div id="progress"><div id="progressFill"></div></div>
+    </footer>
+
+    <aside id="panel" hidden>
+      <div class="panel-head">
+        <h2>設定・ログ</h2>
+        <button id="panelClose" title="閉じる">✕</button>
+      </div>
+      <label class="row">
+        1日の上限 (kcal)
+        <input id="limitInput" type="number" min="100" step="50" value="2000">
+      </label>
+      <label class="row">
+        自動記録
+        <input id="autoLog" type="checkbox" checked>
+      </label>
+      <div class="row hint">自動記録ON: 同じ食べ物が2回連続で検出されると1人前分を自動で累計します（同一食品90秒の再記録クールダウン付き）。</div>
+      <h3>今日の記録</h3>
+      <ul id="logList"></ul>
+      <button id="resetDay" class="danger">今日の記録をリセット</button>
+    </aside>
+
+    <div id="toast"></div>
+  </main>
+  <script type="module" src="app.js?v=3"></script>
+</body>
+</html>
