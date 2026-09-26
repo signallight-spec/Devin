@@ -1,12 +1,18 @@
-"""Mahjong tedashi/tsumogiri detection pipeline (near player).
+"""Mahjong tedashi/tsumogiri detection pipeline.
 
 Method:
   1. Detect discard events = skin-in-pond episodes + pond white-area growth.
-  2. For each event: align & diff clean hand-band crops before/after.
-  3. Classify by where the row lost a tile:
+  2. Attribute each event to a seat: the skin component touching the pond is
+     followed to the frame edge it exits through (the near player's arm hangs
+     to the bottom / low-right edge, the right seat's arm enters horizontally
+     at mid height, the across player's arm comes over the top).
+  3. For the near player's events only: align & diff clean hand-band crops
+     before/after and classify by where the row lost a tile:
        no change          -> TSUMOGIRI (tile went straight from draw to pond)
        interior loss      -> TEDASHI
        right-end loss     -> TSUMOGIRI (drawn tile conventionally at right end)
+     Opponent rows are outside the hand band, so opponent events are kept
+     as unclassifiable 'opp' marks rather than risking a false label.
 Outputs: events.json and before/after contact images in events3/;
 annotate.py renders the visualization video.
 """
@@ -102,6 +108,48 @@ def align_diff(bb, aa):
     else:
         dimg = np.abs(bb[:, -bs:].astype(int) - aa[:, :W + bs].astype(int)), bs
     return dimg
+
+def attribute_player(cap, ev, log, src_fps):
+    """Vote which seat the discarding hand belongs to. The skin component
+    overlapping R_POND is traced to the frame edge it exits through:
+      bottom edge, or right edge below y~400 -> 'self'   (near player: the
+        arm hangs to the bottom-right corner / low right edge)
+      right edge higher                      -> 'right'  (horizontal reach)
+      top or left edge                       -> 'across'
+    Several hands can be in the pond at once (each component votes).
+    Returns 'self' | 'across' | 'right' | 'unknown'."""
+    kr = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+    px0, py0, px1, py1 = R_POND
+    votes = {"self": 0, "across": 0, "right": 0}
+    for e in log:
+        if not (ev["t0"] <= e["t"] <= ev["t1"] + 0.5):
+            continue
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(round(e["t"] * src_fps)))
+        ok, im = cap.read()
+        if not ok:
+            continue
+        H, W = im.shape[:2]
+        mask = cv2.dilate(skin_mask(im).astype(np.uint8), kr)
+        n, lab = cv2.connectedComponents(mask)
+        ids = np.unique(lab[py0:py1, px0:px1])
+        for cid in ids[ids > 0]:
+            ys, xs = np.where(lab == cid)
+            if len(ys) < 800:
+                continue
+            if xs.max() >= W - 4:
+                ymin = ys[xs >= W - 4].min()
+                votes["self" if ymin >= 400 else "right"] += 1
+            if ys.max() >= H - 4:
+                votes["self"] += 1
+            if ys.min() <= 3 or xs.min() <= 3:
+                votes["across"] += 1
+    if votes["self"] and votes["self"] >= max(votes["across"], votes["right"]):
+        return "self"
+    if votes["across"] and votes["across"] >= votes["right"]:
+        return "across"
+    if votes["right"]:
+        return "right"
+    return "unknown"
 
 def main():
     import os as _os
@@ -216,6 +264,15 @@ def main():
             cur_round = ev["round"]
             last_ext = None
         mid = ev["t"]
+        ev["player"] = attribute_player(cap, ev, log, src_fps)
+        if ev["player"] != "self":
+            # not the near player's discard: opponents' tile rows sit outside
+            # the hand band, so the band diff can't tell tedashi from
+            # tsumogiri — and may fire on coincidental own-row changes
+            # (a draw looks like an interior loss). Keep the event, but
+            # leave it unclassified instead of guessing
+            results.append({**ev, "label": "opp"})
+            continue
         # compare frames inside this event's neighbourhood only: an
         # after-frame past the NEXT discard would diff in that discard's row
         # change; a before-frame before the PREVIOUS discard's placement
@@ -327,7 +384,7 @@ def main():
         return "tsumogiri", ext
 
     for i, r in enumerate(results):
-        if r.get("label") == "noisy":
+        if r.get("label") in ("noisy", "opp"):
             continue
         label, ext2 = classify(r)
         r["label"] = label
@@ -341,9 +398,14 @@ def main():
     # otherwise the growth most likely belongs to the later discard
     results = [r for r in results
                if r.get("sure", True) or r["label"] == "tedashi"]
+    kept = {r["img"] for r in results if r.get("img")}
+    for _f in os.listdir("events3"):  # evidence only for kept events
+        if os.path.join("events3", _f) not in kept:
+            os.remove(os.path.join("events3", _f))
     json.dump(results, open("events.json", "w"), indent=1)
     for r in results:
-        print(f"  t={r['t']:6.1f}  {r['label']:10s} runs={r.get('runs')} img={r.get('img','-')}")
+        print(f"  t={r['t']:6.1f}  {r['label']:10s} player={r.get('player','?'):7s} "
+              f"runs={r.get('runs')} img={r.get('img','-')}")
 
 if __name__ == "__main__":
     main()

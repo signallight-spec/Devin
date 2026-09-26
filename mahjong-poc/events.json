@@ -6,6 +6,7 @@
   "delta": 1854,
   "sure": true,
   "round": 0,
+  "player": "self",
   "tb": 7.333333333333333,
   "ta": 11.466666666666667,
   "runs": [
@@ -58,6 +59,7 @@
   "delta": 1353,
   "sure": true,
   "round": 0,
+  "player": "self",
   "tb": 16.8,
   "ta": 18.0,
   "runs": [
@@ -94,6 +96,7 @@
   "delta": 1561,
   "sure": true,
   "round": 0,
+  "player": "self",
   "tb": 37.6,
   "ta": 38.4,
   "runs": [
@@ -130,6 +133,7 @@
   "delta": 943,
   "sure": false,
   "round": 1,
+  "player": "self",
   "tb": 209.6,
   "ta": 211.86666666666667,
   "runs": [
@@ -170,29 +174,8 @@
   "delta": 1038,
   "sure": true,
   "round": 1,
-  "tb": 220.66666666666666,
-  "ta": 221.33333333333334,
-  "runs": [],
-  "shift": 0,
-  "ext": [
-   503,
-   961,
-   40,
-   85
-  ],
-  "det": true,
-  "ext_src": "b",
-  "full": false,
-  "skfrac": 0.0,
-  "fname": null,
-  "label": "tsumogiri",
-  "ext_used": [
-   503,
-   961,
-   40,
-   85
-  ],
-  "img": "events3/ev04_t221_tsumogiri_b221_a221.png"
+  "player": "across",
+  "label": "opp"
  },
  {
   "t": 225.2,
@@ -201,34 +184,8 @@
   "delta": 1051,
   "sure": true,
   "round": 1,
-  "tb": 225.06666666666666,
-  "ta": 225.6,
-  "runs": [
-   [
-    1000,
-    1069
-   ]
-  ],
-  "shift": 0,
-  "ext": [
-   193,
-   907,
-   40,
-   85
-  ],
-  "det": true,
-  "ext_src": "b",
-  "full": false,
-  "skfrac": 0.0,
-  "fname": null,
-  "label": "tsumogiri",
-  "ext_used": [
-   193,
-   907,
-   40,
-   85
-  ],
-  "img": "events3/ev06_t225_tsumogiri_b225_a226.png"
+  "player": "across",
+  "label": "opp"
  },
  {
   "t": 248.06666666666666,
@@ -237,6 +194,7 @@
   "delta": 1624,
   "sure": true,
   "round": 1,
+  "player": "self",
   "tb": 247.73333333333332,
   "ta": 248.8,
   "runs": [],
@@ -268,6 +226,7 @@
   "delta": 1743,
   "sure": true,
   "round": 1,
+  "player": "self",
   "tb": 260.6666666666667,
   "ta": 261.6,
   "runs": [],
@@ -299,34 +258,8 @@
   "delta": 1164,
   "sure": true,
   "round": 1,
-  "tb": 290.1333333333333,
-  "ta": 291.3333333333333,
-  "runs": [
-   [
-    1033,
-    1069
-   ]
-  ],
-  "shift": 0,
-  "ext": [
-   659,
-   894,
-   50,
-   95
-  ],
-  "det": true,
-  "ext_src": "b",
-  "full": false,
-  "skfrac": 0.034704491725768324,
-  "fname": null,
-  "label": "tsumogiri",
-  "ext_used": [
-   659,
-   894,
-   50,
-   95
-  ],
-  "img": "events3/ev10_t291_tsumogiri_b290_a291.png"
+  "player": "right",
+  "label": "opp"
  },
  {
   "t": 307.8666666666667,
@@ -335,29 +268,8 @@
   "delta": 1567,
   "sure": true,
   "round": 1,
-  "tb": 307.46666666666664,
-  "ta": 308.53333333333336,
-  "runs": [],
-  "shift": 0,
-  "ext": [
-   659,
-   879,
-   0,
-   45
-  ],
-  "det": true,
-  "ext_src": "b",
-  "full": false,
-  "skfrac": 0.031212121212121212,
-  "fname": null,
-  "label": "tsumogiri",
-  "ext_used": [
-   659,
-   879,
-   0,
-   45
-  ],
-  "img": "events3/ev11_t308_tsumogiri_b307_a309.png"
+  "player": "right",
+  "label": "opp"
  },
  {
   "t": 326.66666666666663,
@@ -366,42 +278,8 @@
   "delta": 1698,
   "sure": true,
   "round": 1,
-  "tb": 325.73333333333335,
-  "ta": 327.8666666666667,
-  "runs": [
-   [
-    549,
-    765
-   ],
-   [
-    793,
-    846
-   ],
-   [
-    878,
-    921
-   ]
-  ],
-  "shift": 0,
-  "ext": [
-   547,
-   767,
-   0,
-   45
-  ],
-  "det": true,
-  "ext_src": "b",
-  "full": false,
-  "skfrac": 0.05646464646464647,
-  "fname": null,
-  "label": "tedashi",
-  "ext_used": [
-   547,
-   767,
-   0,
-   45
-  ],
-  "img": "events3/ev12_t327_tedashi_b326_a328.png"
+  "player": "right",
+  "label": "opp"
  },
  {
   "t": 347.3333333333333,
@@ -410,6 +288,7 @@
   "delta": 1195,
   "sure": true,
   "round": 1,
+  "player": "self",
   "tb": 345.2,
   "ta": 349.73333333333335,
   "runs": [
@@ -450,34 +329,8 @@
   "delta": 1113,
   "sure": true,
   "round": 1,
-  "tb": 400.6666666666667,
-  "ta": 401.6,
-  "runs": [
-   [
-    852,
-    909
-   ]
-  ],
-  "shift": 0,
-  "ext": [
-   550,
-   714,
-   0,
-   45
-  ],
-  "det": true,
-  "ext_src": "b",
-  "full": false,
-  "skfrac": 0.056504065040650406,
-  "fname": null,
-  "label": "tsumogiri",
-  "ext_used": [
-   550,
-   714,
-   0,
-   45
-  ],
-  "img": "events3/ev14_t401_tsumogiri_b401_a402.png"
+  "player": "right",
+  "label": "opp"
  },
  {
   "t": 411.66666666666663,
@@ -486,6 +339,7 @@
   "delta": 1567,
   "sure": true,
   "round": 1,
+  "player": "self",
   "tb": 409.73333333333335,
   "ta": 413.73333333333335,
   "runs": [
@@ -534,6 +388,7 @@
   "delta": 1720,
   "sure": true,
   "round": 1,
+  "player": "self",
   "tb": 431.06666666666666,
   "ta": 431.73333333333335,
   "runs": [
@@ -564,48 +419,13 @@
   "img": "events3/ev16_t431_tsumogiri_b431_a432.png"
  },
  {
-  "t": 509.6666666666667,
-  "t0": 509.6,
-  "t1": 509.73333333333335,
-  "delta": 1505,
-  "sure": false,
-  "round": 1,
-  "tb": 509.46666666666664,
-  "ta": 510.1333333333333,
-  "runs": [
-   [
-    358,
-    435
-   ]
-  ],
-  "shift": 0,
-  "ext": [
-   248,
-   506,
-   42,
-   87
-  ],
-  "det": true,
-  "ext_src": "b",
-  "full": false,
-  "skfrac": 0.002239448751076658,
-  "fname": null,
-  "label": "tedashi",
-  "ext_used": [
-   248,
-   506,
-   42,
-   87
-  ],
-  "img": "events3/ev17_t510_tedashi_b509_a510.png"
- },
- {
   "t": 512.0666666666666,
   "t0": 511.46666666666664,
   "t1": 512.6666666666666,
   "delta": 3460,
   "sure": true,
   "round": 1,
+  "player": "self",
   "tb": 511.06666666666666,
   "ta": 513.0666666666667,
   "runs": [],
@@ -637,29 +457,8 @@
   "delta": 1633,
   "sure": true,
   "round": 1,
-  "tb": 543.8666666666667,
-  "ta": 544.5333333333333,
-  "runs": [],
-  "shift": 0,
-  "ext": [
-   218,
-   913,
-   31,
-   76
-  ],
-  "det": true,
-  "ext_src": "b",
-  "full": false,
-  "skfrac": 0.022414068745003998,
-  "fname": null,
-  "label": "tsumogiri",
-  "ext_used": [
-   218,
-   913,
-   31,
-   76
-  ],
-  "img": "events3/ev19_t544_tsumogiri_b544_a545.png"
+  "player": "unknown",
+  "label": "opp"
  },
  {
   "t": 549.2,
@@ -668,6 +467,7 @@
   "delta": 1519,
   "sure": true,
   "round": 1,
+  "player": "self",
   "tb": 547.3333333333334,
   "ta": 551.2,
   "runs": [

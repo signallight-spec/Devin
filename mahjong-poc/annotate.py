@@ -1,6 +1,7 @@
-"""Render annotated video: discards are shown on a logical 6x3 pond table
-(the layout real discards use), not overlaid on physical positions.
-Cell fill order = discard order. Red = tedashi, cyan = tsumogiri."""
+"""Render annotated video: each seat's discards fill a logical 6x3 pond
+table (the layout real discards use), not physical positions.
+Cell fill order = discard order. Red = tedashi, cyan = tsumogiri,
+gray ? = opponent discard (their row isn't visible, so unclassifiable)."""
 import cv2
 import numpy as np
 import json, os, sys
@@ -12,6 +13,8 @@ R_HAND = (170, 545, 1240, 660)
 CELL_W, CELL_H = 46, 40
 
 LEGEND = {"tedashi": (0, 0, 255), "tsumogiri": (255, 200, 0), "tsumogiri?": (200, 200, 0)}
+# display order mirrors the table: across seat at top, self at bottom
+PLAYERS = [("across", "across"), ("right", "right"), ("self", "near player")]
 
 
 def draw_table(img, cells, ox, oy, title):
@@ -54,11 +57,15 @@ def main():
     if not os.path.exists("events.json"):
         sys.exit("events.json is missing or stale (pipeline3.py was interrupted); rerun it first")
     events = json.load(open("events.json"))
-    marks = []  # (t_shown, label) — table cells fill in discard order
+    marks = []  # (t_shown, label, player) — table cells fill in discard order
     for i, ev in enumerate(events):
         # keep a placeholder for unclassified discards: a cell position IS
-        # the discard index, so skipping would shift every later discard
-        marks.append({"t": ev.get("ta", ev["t"]), "label": ev["label"]})
+        # the discard index, so skipping would shift every later discard.
+        # 'unknown' attribution lands in the across table — with no edge
+        # contact the most likely source is the player reaching from the top
+        p = ev.get("player", "self")
+        marks.append({"t": ev.get("ta", ev["t"]), "label": ev["label"],
+                      "player": "across" if p == "unknown" else p})
     print(f"{len(marks)} cells")
 
     # sweep intervals = long merged skin-in-pond episodes (deal/transition)
@@ -100,12 +107,18 @@ def main():
         placed = [] if in_sweep else [m for m in marks
                                     if m["t"] <= t and m["t"] > sweep_end]
         cv2.rectangle(img, (R_POND[0], R_POND[1]), (R_POND[2], R_POND[3]), (80, 80, 80), 1)
-        oy = H - 165 - (CELL_H if len(placed) > 18 else 0)
-        draw_table(img, [m["label"] for m in placed], 15, oy, "near player")
-        nt = sum(1 for m in placed if m["label"] == "tedashi")
-        nm = sum(1 for m in placed if m["label"].startswith("tsumogiri"))
-        cv2.putText(img, f"tedashi={nt}  tsumogiri={nm}", (300, H - 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        # one table per seat, stacked down the left margin
+        oy = 8
+        for key, title in PLAYERS:
+            cells = [m["label"] for m in placed if m["player"] == key]
+            draw_table(img, cells, 15, oy, title)
+            oy += (4 if len(cells) > 18 else 3) * CELL_H + 26 + 8
+            if key == "self":
+                nt = sum(1 for c in cells if c == "tedashi")
+                nm = sum(1 for c in cells if c.startswith("tsumogiri"))
+                cv2.putText(img, f"tedashi={nt}  tsumogiri={nm}",
+                            (15 + 6 * CELL_W + 12, oy - 14),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         out.write(img)
     out.release()
     cap.release()

@@ -1,78 +1,92 @@
 [
  {
   "t": 11.466666666666667,
-  "label": "tedashi"
+  "label": "tedashi",
+  "player": "self"
  },
  {
   "t": 18.0,
-  "label": "tsumogiri?"
+  "label": "tsumogiri?",
+  "player": "self"
  },
  {
   "t": 38.4,
-  "label": "tsumogiri?"
+  "label": "tsumogiri?",
+  "player": "self"
  },
  {
   "t": 211.86666666666667,
-  "label": "tedashi"
+  "label": "tedashi",
+  "player": "self"
  },
  {
-  "t": 221.33333333333334,
-  "label": "tsumogiri"
+  "t": 220.8,
+  "label": "opp",
+  "player": "across"
  },
  {
-  "t": 225.6,
-  "label": "tsumogiri"
+  "t": 225.2,
+  "label": "opp",
+  "player": "across"
  },
  {
   "t": 248.8,
-  "label": "tsumogiri"
+  "label": "tsumogiri",
+  "player": "self"
  },
  {
   "t": 261.6,
-  "label": "tsumogiri"
+  "label": "tsumogiri",
+  "player": "self"
  },
  {
-  "t": 291.3333333333333,
-  "label": "tsumogiri"
+  "t": 290.5333333333333,
+  "label": "opp",
+  "player": "right"
  },
  {
-  "t": 308.53333333333336,
-  "label": "tsumogiri"
+  "t": 307.8666666666667,
+  "label": "opp",
+  "player": "right"
  },
  {
-  "t": 327.8666666666667,
-  "label": "tedashi"
+  "t": 326.66666666666663,
+  "label": "opp",
+  "player": "right"
  },
  {
   "t": 349.73333333333335,
-  "label": "tedashi"
+  "label": "tedashi",
+  "player": "self"
  },
  {
-  "t": 401.6,
-  "label": "tsumogiri"
+  "t": 401.0,
+  "label": "opp",
+  "player": "right"
  },
  {
   "t": 413.73333333333335,
-  "label": "tedashi"
+  "label": "tedashi",
+  "player": "self"
  },
  {
   "t": 431.73333333333335,
-  "label": "tsumogiri"
- },
- {
-  "t": 510.1333333333333,
-  "label": "tedashi"
+  "label": "tsumogiri",
+  "player": "self"
  },
  {
   "t": 513.0666666666667,
-  "label": "tsumogiri"
+  "label": "tsumogiri",
+  "player": "self"
  },
  {
-  "t": 544.5333333333333,
-  "label": "tsumogiri"
+  "t": 544.0666666666666,
+  "label": "opp",
+  "player": "across"
  },
  {
   "t": 551.2,
-  "label": "tedashi"
+  "label": "tedashi",
+  "player": "self"
  }
 ]
