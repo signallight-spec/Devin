@@ -31,6 +31,9 @@ const FOODS = [
 
 const NON_FOOD = [
   'a photo of a person',
+  'a close-up photo of a human face',
+  'a selfie photo of a face looking at the camera',
+  'a photo of hands',
   'a photo of an office desk',
   'a photo of a laptop computer',
   'a photo of a smartphone',
@@ -49,7 +52,7 @@ const SCAN_MS = 1400;
 
 const DEMO_IMAGES = [
   'demo/sushi.jpg', 'demo/ramen.jpg', 'demo/burger.jpg',
-  'demo/onigiri.jpg', 'demo/curry.jpg', 'demo/desk.jpg',
+  'demo/onigiri.jpg', 'demo/curry.jpg', 'demo/desk.jpg', 'demo/face.jpg',
 ];
 const DEMO_INTERVAL_MS = 5000;
 
