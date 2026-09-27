@@ -347,6 +347,84 @@ describe("APIハンドラー", () => {
     expect((await handleApi(request("/today", {}, newFamilyKey), env)).status).toBe(200);
   });
 
+  it("新しい家族キーで登録した通知先は確認後も保持する", async () => {
+    const token = await parentToken();
+    const newFamilyKey = "B".repeat(43);
+    await handleApi(
+      request(
+        "/push/subscriptions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            endpoint: "https://fcm.googleapis.com/fcm/send/old-key",
+            p256dh: "old-key",
+            auth: "old-auth"
+          })
+        },
+        familyKey
+      ),
+      env
+    );
+    await handleApi(
+      request(
+        "/parent/family-key/rotate",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ familyKey: newFamilyKey })
+        },
+        familyKey,
+        token
+      ),
+      env
+    );
+    await handleApi(
+      request(
+        "/push/subscriptions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            endpoint: "https://fcm.googleapis.com/fcm/send/new-key",
+            p256dh: "new-key",
+            auth: "new-auth"
+          })
+        },
+        newFamilyKey
+      ),
+      env
+    );
+
+    const confirmed = await handleApi(
+      request(
+        "/parent/family-key/confirm",
+        { method: "POST" },
+        newFamilyKey,
+        token
+      ),
+      env
+    );
+
+    expect(confirmed.status).toBe(204);
+    const subscriptions = testD1.sqlite
+      .prepare(
+        `SELECT endpoint, family_key_generation
+         FROM push_subscriptions
+         ORDER BY endpoint`
+      )
+      .all() as Array<{
+        endpoint: string;
+        family_key_generation: string;
+      }>;
+    expect(subscriptions).toEqual([
+      {
+        endpoint: "https://fcm.googleapis.com/fcm/send/new-key",
+        family_key_generation: "active"
+      }
+    ]);
+  });
+
   it("確認中にpending家族キーが変わった場合は別のキーを昇格しない", async () => {
     const token = await parentToken();
     const firstFamilyKey = "B".repeat(43);

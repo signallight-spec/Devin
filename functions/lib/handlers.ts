@@ -105,19 +105,26 @@ function requireRule(
   }
 }
 
+type FamilyKeyGeneration = "active" | "pending";
+
 async function requireFamilyKey(
   request: Request,
   settings: AppSettingsRow
-): Promise<void> {
+): Promise<FamilyKeyGeneration> {
   const familyKey = request.headers.get("x-family-key");
-  if (
-    !familyKey ||
-    (!(await familyKeyMatches(familyKey, settings.family_key_hash)) &&
-      (!settings.pending_family_key_hash ||
-        !(await familyKeyMatches(familyKey, settings.pending_family_key_hash))))
-  ) {
+  if (!familyKey) {
     throw new HttpError(401, "INVALID_FAMILY_KEY", "家族キーが無効です。");
   }
+  if (
+    settings.pending_family_key_hash &&
+    await familyKeyMatches(familyKey, settings.pending_family_key_hash)
+  ) {
+    return "pending";
+  }
+  if (await familyKeyMatches(familyKey, settings.family_key_hash)) {
+    return "active";
+  }
+  throw new HttpError(401, "INVALID_FAMILY_KEY", "家族キーが無効です。");
 }
 
 async function latestStreak(
@@ -308,21 +315,30 @@ function subscriptionValues(body: Record<string, unknown>): {
 async function handlePushSubscriptionPost(
   request: Request,
   env: Env,
-  now: Date
+  now: Date,
+  familyKeyGeneration: FamilyKeyGeneration
 ): Promise<Response> {
   const values = subscriptionValues(await readJsonObject(request));
   const nowIso = now.toISOString();
   await env.DB
     .prepare(
       `INSERT INTO push_subscriptions
-        (endpoint, p256dh, auth, created_at_utc, updated_at_utc)
-       VALUES (?, ?, ?, ?, ?)
+        (endpoint, p256dh, auth, family_key_generation, created_at_utc, updated_at_utc)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(endpoint) DO UPDATE SET
          p256dh = excluded.p256dh,
          auth = excluded.auth,
+         family_key_generation = excluded.family_key_generation,
          updated_at_utc = excluded.updated_at_utc`
     )
-    .bind(values.endpoint, values.p256dh, values.auth, nowIso, nowIso)
+    .bind(
+      values.endpoint,
+      values.p256dh,
+      values.auth,
+      familyKeyGeneration,
+      nowIso,
+      nowIso
+    )
     .run();
   return empty();
 }
@@ -981,10 +997,23 @@ export async function handleConfirmFamilyKey(
     );
   }
   const pendingFamilyKeyHash = await sha256Hex(familyKey);
-  const [, promotion] = await env.DB.batch([
+  const [, , promotion] = await env.DB.batch([
     env.DB
       .prepare(
         `DELETE FROM push_subscriptions
+         WHERE family_key_generation = 'active'
+           AND EXISTS (
+             SELECT 1
+             FROM app_settings
+             WHERE id = 1
+               AND pending_family_key_hash = ?
+           )`
+      )
+      .bind(pendingFamilyKeyHash),
+    env.DB
+      .prepare(
+        `UPDATE push_subscriptions
+         SET family_key_generation = 'active'
          WHERE EXISTS (
            SELECT 1
            FROM app_settings
@@ -1055,7 +1084,7 @@ export async function handleApi(request: Request, env: Env): Promise<Response> {
   if (!settings) {
     throw new HttpError(409, "SETUP_REQUIRED", "初期設定が必要です。");
   }
-  await requireFamilyKey(request, settings);
+  const familyKeyGeneration = await requireFamilyKey(request, settings);
 
   if (path.startsWith("/parent/") && path !== "/parent/session") {
     if (!env.PARENT_SESSION_SECRET) {
@@ -1082,7 +1111,12 @@ export async function handleApi(request: Request, env: Env): Promise<Response> {
     return handleGoalUpdate(request, env, now);
   }
   if (path === "/push/subscriptions" && method === "POST") {
-    return handlePushSubscriptionPost(request, env, now);
+    return handlePushSubscriptionPost(
+      request,
+      env,
+      now,
+      familyKeyGeneration
+    );
   }
   if (path === "/push/subscriptions" && method === "DELETE") {
     return handlePushSubscriptionDelete(request, env);
