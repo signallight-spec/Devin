@@ -218,7 +218,8 @@ describe("APIハンドラー", () => {
       endpoint: "https://fcm.googleapis.com/fcm/send/subscription-id",
       p256dh: "client-public-key",
       auth: "auth-secret",
-      deviceId: "11111111-1111-4111-8111-111111111111"
+      deviceId: "11111111-1111-4111-8111-111111111111",
+      deviceToken: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
     };
     const created = await handleApi(
       request(
@@ -278,7 +279,8 @@ describe("APIハンドラー", () => {
       endpoint: "https://jmt17.google.com/fcm/send/subscription-id",
       p256dh: "client-public-key",
       auth: "auth-secret",
-      deviceId: "22222222-2222-4222-8222-222222222222"
+      deviceId: "22222222-2222-4222-8222-222222222222",
+      deviceToken: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
     };
     const created = await handleApi(
       request(
@@ -314,12 +316,62 @@ describe("APIハンドラー", () => {
     }
   });
 
+  it("別の端末tokenでは既存deviceIdの通知先を置き換えない", async () => {
+    const deviceId = "55555555-5555-4555-8555-555555555555";
+    const originalEndpoint =
+      "https://fcm.googleapis.com/fcm/send/original-device";
+    const original = await handleApi(
+      request(
+        "/push/subscriptions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            endpoint: originalEndpoint,
+            p256dh: "original-key",
+            auth: "original-auth",
+            deviceId,
+            deviceToken: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+          })
+        },
+        familyKey
+      ),
+      env
+    );
+    expect(original.status).toBe(204);
+
+    const replaced = await handleRequest(
+      request(
+        "/push/subscriptions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            endpoint: "https://fcm.googleapis.com/fcm/send/other-device",
+            p256dh: "other-key",
+            auth: "other-auth",
+            deviceId,
+            deviceToken: "ffffffff-ffff-4fff-8fff-ffffffffffff"
+          })
+        },
+        familyKey
+      )
+    );
+    const saved = testD1.sqlite
+      .prepare("SELECT endpoint FROM push_subscriptions WHERE device_id = ?")
+      .get(deviceId) as { endpoint: string };
+
+    expect(replaced.status).toBe(409);
+    expect(saved.endpoint).toBe(originalEndpoint);
+  });
+
   it("Push通知先を正規化し認証情報やフラグメントを拒否する", async () => {
     const input = {
       endpoint: "https://FCM.GOOGLEAPIS.COM/fcm/send/subscription-id",
       p256dh: "client-public-key",
       auth: "auth-secret",
-      deviceId: "44444444-4444-4444-8444-444444444444"
+      deviceId: "44444444-4444-4444-8444-444444444444",
+      deviceToken: "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
     };
     const created = await handleApi(
       request(
@@ -394,6 +446,13 @@ describe("APIハンドラー", () => {
     expect(confirmed.status).toBe(204);
     expect((await handleRequest(request("/today", {}, familyKey))).status).toBe(401);
     expect((await handleApi(request("/today", {}, newFamilyKey), env)).status).toBe(200);
+    expect(
+      (
+        await handleRequest(
+          request("/parent/dashboard", {}, newFamilyKey, token)
+        )
+      ).status
+    ).toBe(403);
   });
 
   it("新しい家族キーで登録した通知先は確認後も保持する", async () => {
@@ -409,7 +468,8 @@ describe("APIハンドラー", () => {
             endpoint: "https://fcm.googleapis.com/fcm/send/old-key",
             p256dh: "old-key",
             auth: "old-auth",
-            deviceId: "33333333-3333-4333-8333-333333333333"
+            deviceId: "33333333-3333-4333-8333-333333333333",
+            deviceToken: "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
           })
         },
         familyKey
@@ -439,7 +499,8 @@ describe("APIハンドラー", () => {
             endpoint: "https://fcm.googleapis.com/fcm/send/new-key",
             p256dh: "new-key",
             auth: "new-auth",
-            deviceId: "33333333-3333-4333-8333-333333333333"
+            deviceId: "33333333-3333-4333-8333-333333333333",
+            deviceToken: "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
           })
         },
         newFamilyKey

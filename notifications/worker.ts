@@ -141,6 +141,29 @@ async function achievementExists(
   return Boolean(achievement);
 }
 
+async function notificationStillDue(
+  env: NotificationEnv,
+  localDate: string,
+  now: Date
+): Promise<boolean> {
+  const settings = await env.DB
+    .prepare(
+      `SELECT notifications_enabled, notification_time
+       FROM app_settings
+       WHERE id = 1`
+    )
+    .first<NotificationSettingsRow>();
+  if (!settings) {
+    return false;
+  }
+  const timing = notificationDue(
+    Boolean(settings.notifications_enabled),
+    settings.notification_time,
+    now
+  );
+  return timing.due && timing.localDate === localDate;
+}
+
 export async function processReminder(
   env: NotificationEnv,
   now = new Date()
@@ -199,6 +222,15 @@ export async function processReminder(
         return;
       }
       if (await achievementExists(env, timing.localDate)) {
+        await releaseSubscriptionClaim(
+          env,
+          timing.localDate,
+          subscription.device_id,
+          claimToken
+        );
+        return;
+      }
+      if (!(await notificationStillDue(env, timing.localDate, now))) {
         await releaseSubscriptionClaim(
           env,
           timing.localDate,
@@ -282,6 +314,7 @@ export default {
     env: NotificationEnv,
     context: ExecutionContext
   ): Promise<void> {
-    context.waitUntil(processReminder(env, new Date(controller.scheduledTime)));
+    void controller;
+    context.waitUntil(processReminder(env, new Date()));
   }
 };

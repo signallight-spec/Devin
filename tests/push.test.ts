@@ -125,7 +125,8 @@ describe("Push通知", () => {
         endpoint: subscription.endpoint,
         p256dh: "client-public-key",
         auth: "auth-secret",
-        deviceId: "11111111-1111-4111-8111-111111111111"
+        deviceId: "11111111-1111-4111-8111-111111111111",
+        deviceToken: "11111111-1111-4111-8111-111111111111"
       },
       "pending-family-key"
     );
@@ -149,7 +150,8 @@ describe("Push通知", () => {
       endpoint: subscription.endpoint,
       p256dh: "client-public-key",
       auth: "auth-secret",
-      deviceId: "11111111-1111-4111-8111-111111111111"
+      deviceId: "11111111-1111-4111-8111-111111111111",
+      deviceToken: "11111111-1111-4111-8111-111111111111"
     });
   });
 
@@ -238,7 +240,8 @@ describe("Push通知", () => {
       endpoint: newSubscription.endpoint,
       p256dh: "client-public-key",
       auth: "auth-secret",
-      deviceId: "11111111-1111-4111-8111-111111111111"
+      deviceId: "11111111-1111-4111-8111-111111111111",
+      deviceToken: "11111111-1111-4111-8111-111111111111"
     });
   });
 

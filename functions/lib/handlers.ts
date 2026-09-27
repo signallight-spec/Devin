@@ -309,12 +309,20 @@ function subscriptionValues(body: Record<string, unknown>): {
   p256dh: string;
   auth: string;
   deviceId: string;
+  deviceToken: string;
 } {
-  rejectUnknownKeys(body, ["endpoint", "p256dh", "auth", "deviceId"]);
+  rejectUnknownKeys(body, [
+    "endpoint",
+    "p256dh",
+    "auth",
+    "deviceId",
+    "deviceToken"
+  ]);
   const endpoint = requiredString(body, "endpoint");
   const p256dh = requiredString(body, "p256dh");
   const auth = requiredString(body, "auth");
   const deviceId = requiredString(body, "deviceId");
+  const deviceToken = requiredString(body, "deviceToken");
   let parsedEndpoint: URL;
   try {
     parsedEndpoint = new URL(endpoint);
@@ -335,11 +343,18 @@ function subscriptionValues(body: Record<string, unknown>): {
     endpoint.length > 2048 ||
     p256dh.length > 512 ||
     auth.length > 512 ||
-    !DEVICE_ID_PATTERN.test(deviceId)
+    !DEVICE_ID_PATTERN.test(deviceId) ||
+    !DEVICE_ID_PATTERN.test(deviceToken)
   ) {
     throw new HttpError(400, "INVALID_INPUT", "通知先が正しくありません。");
   }
-  return { endpoint: parsedEndpoint.href, p256dh, auth, deviceId };
+  return {
+    endpoint: parsedEndpoint.href,
+    p256dh,
+    auth,
+    deviceId,
+    deviceToken
+  };
 }
 
 async function handlePushSubscriptionPost(
@@ -349,36 +364,51 @@ async function handlePushSubscriptionPost(
   familyKeyGeneration: FamilyKeyGeneration
 ): Promise<Response> {
   const values = subscriptionValues(await readJsonObject(request));
+  const deviceTokenHash = await sha256Hex(values.deviceToken);
   const nowIso = now.toISOString();
-  await env.DB
+  const saved = await env.DB
     .prepare(
       `INSERT INTO push_subscriptions
-        (endpoint, p256dh, auth, device_id, family_key_generation,
+        (endpoint, p256dh, auth, device_id, device_token_hash,
+         family_key_generation,
          created_at_utc, updated_at_utc)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(endpoint) DO UPDATE SET
          p256dh = excluded.p256dh,
          auth = excluded.auth,
          device_id = excluded.device_id,
+         device_token_hash = excluded.device_token_hash,
          family_key_generation = excluded.family_key_generation,
          updated_at_utc = excluded.updated_at_utc
+       WHERE push_subscriptions.device_token_hash IS NULL
+          OR push_subscriptions.device_token_hash = excluded.device_token_hash
        ON CONFLICT(device_id) DO UPDATE SET
          endpoint = excluded.endpoint,
          p256dh = excluded.p256dh,
          auth = excluded.auth,
+         device_token_hash = excluded.device_token_hash,
          family_key_generation = excluded.family_key_generation,
-         updated_at_utc = excluded.updated_at_utc`
+         updated_at_utc = excluded.updated_at_utc
+       WHERE push_subscriptions.device_token_hash = excluded.device_token_hash`
     )
     .bind(
       values.endpoint,
       values.p256dh,
       values.auth,
       values.deviceId,
+      deviceTokenHash,
       familyKeyGeneration,
       nowIso,
       nowIso
     )
     .run();
+  if (!saved.meta.changes) {
+    throw new HttpError(
+      409,
+      "PUSH_DEVICE_CONFLICT",
+      "この通知端末を更新できませんでした。"
+    );
+  }
   return empty();
 }
 
@@ -1087,6 +1117,7 @@ export async function handleConfirmFamilyKey(
            family_key_hash = ?,
            pending_family_key_hash = NULL,
            pending_family_key_created_at_utc = NULL,
+           parent_session_version = parent_session_version + 1,
            updated_at_utc = ?
          WHERE id = 1
            AND pending_family_key_hash = ?`

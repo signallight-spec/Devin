@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { processReminder } from "../notifications/worker";
+import notificationWorker, { processReminder } from "../notifications/worker";
 
 vi.mock("@block65/webcrypto-web-push", () => ({
   buildPushPayload: vi.fn(async () => ({
@@ -329,6 +329,53 @@ describe("未達通知Worker", () => {
       )
       .get() as { count: number };
     expect(claimCount.count).toBe(0);
+  });
+
+  it("claim後に通知設定がOFFになった場合は送信しない", async () => {
+    database.afterRun = (query) => {
+      if (!query.includes("INSERT OR IGNORE INTO notification_delivery_subscriptions")) {
+        return;
+      }
+      database.afterRun = undefined;
+      database.sqlite.exec(`
+        UPDATE app_settings
+        SET notifications_enabled = 0
+        WHERE id = 1
+      `);
+    };
+
+    await expect(
+      processReminder(env, new Date("2026-09-23T11:05:00.000Z"))
+    ).resolves.toBe(0);
+
+    expect(fetch).not.toHaveBeenCalled();
+    const claimCount = database.sqlite
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM notification_delivery_subscriptions`
+      )
+      .get() as { count: number };
+    expect(claimCount.count).toBe(0);
+  });
+
+  it("遅延したCronは実行時の東京日付で判定する", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-23T15:01:00.000Z"));
+    let reminder: Promise<void> | undefined;
+    const context = {
+      waitUntil(promise: Promise<void>) {
+        reminder = promise;
+      }
+    } as ExecutionContext;
+
+    await notificationWorker.scheduled(
+      { scheduledTime: new Date("2026-09-23T14:55:00.000Z").getTime() } as ScheduledController,
+      env,
+      context
+    );
+    await reminder;
+
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("当日の達成があれば通知しない", async () => {

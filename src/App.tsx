@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   clearFamilyKey,
   clearPendingSetupKey,
+  consumeFamilyKeyFromHash,
   getFamilyKey,
   getPendingSetupKey
 } from "./api";
@@ -11,8 +12,13 @@ import { HomeScreen } from "./screens/HomeScreen";
 import { ParentScreen } from "./screens/ParentScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { SetupScreen } from "./screens/SetupScreen";
-import { disconnectPushBeforeFamilyKeyRemoval } from "./push";
+import {
+  disconnectPushBeforeFamilyKeyRemoval,
+  syncExistingPushSubscription
+} from "./push";
 import { useTimer } from "./hooks/useTimer";
+
+const sharedFamilyKeyFromLocation = consumeFamilyKeyFromHash();
 
 function pageFromHash(): Page {
   const value = window.location.hash.slice(1);
@@ -30,6 +36,10 @@ function AuthenticatedApp({
   const [page, setPage] = useState<Page>(pageFromHash);
   const [timerGoalMinutes, setTimerGoalMinutes] = useState(25);
   const timer = useTimer(timerGoalMinutes);
+
+  useEffect(() => {
+    void syncExistingPushSubscription(getFamilyKey()).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     const onHashChange = () => setPage(pageFromHash());
@@ -64,7 +74,10 @@ function AuthenticatedApp({
 }
 
 export default function App() {
-  const [hasFamilyKey, setHasFamilyKey] = useState(Boolean(getFamilyKey()));
+  const [sharedFamilyKey] = useState(sharedFamilyKeyFromLocation);
+  const [hasFamilyKey, setHasFamilyKey] = useState(
+    Boolean(getFamilyKey()) && !sharedFamilyKey
+  );
   const [hasPendingSetupKey, setHasPendingSetupKey] = useState(
     Boolean(getPendingSetupKey())
   );
@@ -86,6 +99,7 @@ export default function App() {
   if (!hasFamilyKey || hasPendingSetupKey) {
     return (
       <SetupScreen
+        initialFamilyKey={sharedFamilyKey}
         onReady={() => {
           clearPendingSetupKey();
           setHasPendingSetupKey(false);

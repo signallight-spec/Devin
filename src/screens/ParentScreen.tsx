@@ -11,6 +11,7 @@ import {
   setFamilyKey
 } from "../api";
 import { StatusMessage } from "../components/StatusMessage";
+import { FamilyKeyQrCode } from "../components/FamilyKeyQrCode";
 import { dateTime, shortDate, yen } from "../format";
 import type {
   Achievement,
@@ -85,8 +86,9 @@ export function ParentScreen() {
     bonusAmountYen: 300
   });
   const [newPin, setNewPin] = useState("");
-  const [rotatedKey, setRotatedKey] = useState(getPendingRotatedKey);
+  const [rotatedKey, setRotatedKey] = useState("");
   const [pendingFamilyKey, setPendingFamilyKey] = useState(getPendingRotatedKey);
+  const [showFamilyKeyQr, setShowFamilyKeyQr] = useState(false);
   const [notificationForm, setNotificationForm] = useState({
     enabled: true,
     time: "20:00"
@@ -245,6 +247,7 @@ export function ParentScreen() {
       setFamilyKey(familyKey);
       setRotatedKey(familyKey);
       setPendingFamilyKey(familyKey);
+      setShowFamilyKeyQr(true);
       setTone("success");
       setMessage(
         "新しい家族キーを保存して、もう1台へ登録してから古いキーを無効化してください。"
@@ -276,6 +279,7 @@ export function ParentScreen() {
       await api.confirmFamilyKey(pendingFamilyKey);
       clearPendingRotatedKey();
       setPendingFamilyKey("");
+      setRotatedKey("");
       setTone("success");
       setMessage("古い家族キーを無効化しました。");
     } catch (error) {
@@ -484,19 +488,30 @@ export function ParentScreen() {
             >
               コピー
             </button>
-            {pendingFamilyKey && (
-              <button
-                className="text-button"
-                disabled={busy}
-                onClick={confirmRotatedKey}
-                type="button"
-              >
-                保存したので古いキーを無効化
-              </button>
-            )}
           </div>
         )}
+        {pendingFamilyKey && (
+          <button
+            className="text-button"
+            disabled={busy}
+            onClick={confirmRotatedKey}
+            type="button"
+          >
+            保存したので古いキーを無効化
+          </button>
+        )}
+        {showFamilyKeyQr && (
+          <FamilyKeyQrCode familyKey={getFamilyKey()} />
+        )}
         <div className="button-row">
+          <button
+            className="secondary-button"
+            disabled={busy}
+            onClick={() => setShowFamilyKeyQr((value) => !value)}
+            type="button"
+          >
+            {showFamilyKeyQr ? "QRコードを隠す" : "娘端末用QRコードを表示"}
+          </button>
           <button
             className="secondary-button"
             disabled={busy || Boolean(pendingFamilyKey)}

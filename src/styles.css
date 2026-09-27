@@ -905,6 +905,28 @@ textarea {
   font-size: 0.8rem;
 }
 
+.family-key-qr {
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  padding: 1rem;
+  text-align: center;
+}
+
+.family-key-qr canvas {
+  width: min(240px, 100%);
+  height: auto;
+}
+
+.family-key-qr p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .family-key-output {
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
   font-size: 0.8rem;

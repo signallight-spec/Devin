@@ -13,6 +13,7 @@ const PENDING_SETUP_KEY_STORAGE = "study-habit-pending-setup-key";
 const PENDING_ROTATED_KEY_STORAGE = "study-habit-pending-rotated-key";
 const PARENT_TOKEN_STORAGE = "study-habit-parent-token";
 const SETTLEMENT_KEY_STORAGE = "study-habit-settlement-key";
+const FAMILY_KEY_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
 export class ApiError extends Error {
   constructor(
@@ -30,6 +31,25 @@ export function getFamilyKey(): string {
 
 export function setFamilyKey(value: string): void {
   localStorage.setItem(FAMILY_KEY_STORAGE, value);
+}
+
+export function familyKeyFromHash(hash: string): string {
+  const params = new URLSearchParams(hash.replace(/^#/, ""));
+  const familyKey = params.get("family-key") ?? "";
+  return FAMILY_KEY_PATTERN.test(familyKey) ? familyKey : "";
+}
+
+export function consumeFamilyKeyFromHash(): string {
+  if (!window.location.hash.includes("family-key=")) {
+    return "";
+  }
+  const familyKey = familyKeyFromHash(window.location.hash);
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${window.location.pathname}${window.location.search}`
+  );
+  return familyKey;
 }
 
 export function getPendingSetupKey(): string {
@@ -220,6 +240,7 @@ export const api = {
     p256dh: string;
     auth: string;
     deviceId: string;
+    deviceToken: string;
   }, familyKey?: string) {
     return apiRequest<void>(
       "/push/subscriptions",

@@ -11,15 +11,23 @@ import {
 import { StatusMessage } from "../components/StatusMessage";
 import { syncExistingPushSubscription } from "../push";
 
-export function SetupScreen({ onReady }: { onReady: () => void }) {
-  const [familyKeyInput, setFamilyKeyInput] = useState("");
+export function SetupScreen({
+  initialFamilyKey = "",
+  onReady
+}: {
+  initialFamilyKey?: string;
+  onReady: () => void;
+}) {
+  const [familyKeyInput, setFamilyKeyInput] = useState(initialFamilyKey);
   const [showInitialSetup, setShowInitialSetup] = useState(false);
   const [bootstrapToken, setBootstrapToken] = useState("");
   const [pin, setPin] = useState("");
   const [generatedKey, setGeneratedKey] = useState(getPendingSetupKey);
   const [setupConfirmed, setSetupConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(
+    initialFamilyKey ? "QRコードから家族キーを読み取りました。" : ""
+  );
   const [copyMessage, setCopyMessage] = useState("");
 
   const saveExistingKey = async () => {
@@ -32,9 +40,9 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
     setMessage("");
     try {
       await api.validateFamilyKey(value);
-      await syncExistingPushSubscription(value);
       setFamilyKey(value);
       onReady();
+      void syncExistingPushSubscription(value).catch(() => undefined);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "家族キーを確認できませんでした。");
     } finally {
@@ -60,8 +68,8 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
     setMessage("");
     try {
       await api.validateFamilyKey(generatedKey);
-      await syncExistingPushSubscription(generatedKey);
       setSetupConfirmed(true);
+      void syncExistingPushSubscription(generatedKey).catch(() => undefined);
     } catch (error) {
       if (error instanceof ApiError && error.status < 500) {
         clearFamilyKey();
@@ -101,8 +109,8 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
       });
       setFamilyKey(result.familyKey);
       setGeneratedKey(result.familyKey);
-      await syncExistingPushSubscription(result.familyKey);
       setSetupConfirmed(true);
+      void syncExistingPushSubscription(result.familyKey).catch(() => undefined);
     } catch (error) {
       setGeneratedKey(getPendingSetupKey());
       setMessage(error instanceof Error ? error.message : "初期設定に失敗しました。");
@@ -195,7 +203,14 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
         >
           {busy ? "確認中…" : "この端末で使う"}
         </button>
-        <StatusMessage message={message} />
+        <StatusMessage
+          message={message}
+          tone={
+            message === "QRコードから家族キーを読み取りました。"
+              ? "success"
+              : "error"
+          }
+        />
         <button
           className="text-button"
           onClick={() => {

@@ -5,6 +5,7 @@ const SERVICE_WORKER_TIMEOUT_MESSAGE =
   "通知の準備が完了しませんでした。ページを再読み込みして、もう一度お試しください。";
 const PENDING_PUSH_DELETION_STORAGE = "study-habit-pending-push-deletion";
 const PUSH_DEVICE_ID_STORAGE = "study-habit-push-device-id";
+const PUSH_DEVICE_TOKEN_STORAGE = "study-habit-push-device-token";
 
 interface PendingPushDeletion {
   endpoint: string;
@@ -54,6 +55,7 @@ function subscriptionInput(subscription: PushSubscription): {
   p256dh: string;
   auth: string;
   deviceId: string;
+  deviceToken: string;
 } {
   const json = subscription.toJSON();
   if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) {
@@ -63,8 +65,19 @@ function subscriptionInput(subscription: PushSubscription): {
     endpoint: json.endpoint,
     p256dh: json.keys.p256dh,
     auth: json.keys.auth,
-    deviceId: pushDeviceId()
+    deviceId: pushDeviceId(),
+    deviceToken: pushDeviceToken()
   };
+}
+
+function pushDeviceToken(): string {
+  const stored = localStorage.getItem(PUSH_DEVICE_TOKEN_STORAGE);
+  if (stored) {
+    return stored;
+  }
+  const created = crypto.randomUUID();
+  localStorage.setItem(PUSH_DEVICE_TOKEN_STORAGE, created);
+  return created;
 }
 
 function pushDeviceId(): string {

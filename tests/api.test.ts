@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   api,
   clearPendingRotatedKey,
+  consumeFamilyKeyFromHash,
+  familyKeyFromHash,
   getFamilyKey,
   getPendingRotatedKey,
   getPendingSetupKey,
@@ -48,6 +50,34 @@ afterEach(() => {
 });
 
 describe("APIクライアント", () => {
+  it("QRコードのURL fragmentから家族キーだけを読み取る", () => {
+    const familyKey = "A".repeat(43);
+
+    expect(familyKeyFromHash(`#family-key=${familyKey}`)).toBe(familyKey);
+    expect(familyKeyFromHash("#family-key=invalid")).toBe("");
+    expect(familyKeyFromHash("#parent")).toBe("");
+  });
+
+  it("QRコードの家族キーを読んだ後にURL fragmentを削除する", () => {
+    const familyKey = "A".repeat(43);
+    const replaceState = vi.fn();
+    vi.stubGlobal("window", {
+      history: { replaceState, state: { navigation: "state" } },
+      location: {
+        hash: `#family-key=${familyKey}`,
+        pathname: "/study/",
+        search: "?source=qr"
+      }
+    });
+
+    expect(consumeFamilyKeyFromHash()).toBe(familyKey);
+    expect(replaceState).toHaveBeenCalledWith(
+      { navigation: "state" },
+      "",
+      "/study/?source=qr"
+    );
+  });
+
   it("タイマー開始時の目標時間を達成APIへ送る", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
