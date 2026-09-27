@@ -47,15 +47,17 @@ function memoryStorage(): Storage {
   };
 }
 
-function pushSubscription(): PushSubscription {
+function pushSubscription(
+  endpoint = "https://jmt17.google.com/fcm/send/subscription-id"
+): PushSubscription {
   return {
-    endpoint: "https://jmt17.google.com/fcm/send/subscription-id",
+    endpoint,
     expirationTime: null,
     options: {} as PushSubscriptionOptions,
     getKey: vi.fn(),
     unsubscribe: vi.fn(),
     toJSON: () => ({
-      endpoint: "https://jmt17.google.com/fcm/send/subscription-id",
+      endpoint,
       keys: {
         p256dh: "client-public-key",
         auth: "auth-secret"
@@ -167,6 +169,46 @@ describe("Push通知", () => {
     expect(subscription.unsubscribe).toHaveBeenCalledOnce();
     expect(apiMocks.deletePushSubscription).toHaveBeenCalledTimes(2);
     expect(localStorage.length).toBe(0);
+  });
+
+  it("未完了のサーバー解除を終えるまで新しい購読を作らない", async () => {
+    const oldSubscription = pushSubscription();
+    vi.mocked(oldSubscription.unsubscribe).mockResolvedValue(true);
+    const newSubscription = pushSubscription(
+      "https://jmt17.google.com/fcm/send/new-subscription-id"
+    );
+    const registered = registration(newSubscription, {} as ServiceWorker);
+    vi.mocked(registered.pushManager.getSubscription)
+      .mockResolvedValueOnce(oldSubscription)
+      .mockResolvedValue(null);
+    vi.stubGlobal("navigator", {
+      serviceWorker: {
+        getRegistration: vi.fn().mockResolvedValue(registered),
+        register: vi.fn(),
+        ready: Promise.resolve(registered)
+      }
+    });
+    apiMocks.deletePushSubscription.mockRejectedValueOnce(
+      new TypeError("network failure")
+    );
+
+    await expect(disablePushNotifications()).rejects.toThrow("network failure");
+    apiMocks.deletePushSubscription.mockRejectedValueOnce(
+      new TypeError("still offline")
+    );
+    await expect(enablePushNotifications("AQ")).rejects.toThrow("still offline");
+
+    expect(registered.pushManager.subscribe).not.toHaveBeenCalled();
+    expect(apiMocks.savePushSubscription).not.toHaveBeenCalled();
+
+    await expect(enablePushNotifications("AQ")).resolves.toBeUndefined();
+    expect(apiMocks.deletePushSubscription).toHaveBeenCalledTimes(3);
+    expect(registered.pushManager.subscribe).toHaveBeenCalledOnce();
+    expect(apiMocks.savePushSubscription).toHaveBeenCalledWith({
+      endpoint: newSubscription.endpoint,
+      p256dh: "client-public-key",
+      auth: "auth-secret"
+    });
   });
 
   it("家族キー削除時のサーバー解除失敗を同じ通知先で再試行する", async () => {

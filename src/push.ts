@@ -126,6 +126,9 @@ export async function enablePushNotifications(
   if (!pushSupported()) {
     throw new Error("このブラウザは通知に対応していません。");
   }
+  if (pendingPushDeletion()) {
+    await removePushSubscription(false, currentPushSubscription);
+  }
   const permission = await Notification.requestPermission();
   if (permission !== "granted") {
     throw new Error("Androidの設定で通知を許可してください。");
