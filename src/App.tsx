@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   clearFamilyKey,
   clearPendingSetupKey,
@@ -40,7 +40,7 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const resetFamilyKey = async () => {
+  const resetFamilyKey = useCallback(async () => {
     try {
       await disconnectPushBeforeFamilyKeyRemoval();
     } catch (error) {
@@ -52,7 +52,7 @@ export default function App() {
     clearFamilyKey();
     setHasFamilyKey(false);
     setHasPendingSetupKey(false);
-  };
+  }, []);
 
   if (!hasFamilyKey || hasPendingSetupKey) {
     return (

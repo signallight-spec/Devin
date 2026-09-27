@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import { StatusMessage } from "../components/StatusMessage";
 import {
   currentPushSubscription,
@@ -47,11 +47,24 @@ export function SettingsScreen({
           );
         }
       })
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
+        if (error instanceof ApiError && error.status === 401) {
+          try {
+            await onFamilyKeyReset();
+            return;
+          } catch (resetError) {
+            setPushTone("error");
+            setPushMessage(
+              resetError instanceof Error
+                ? resetError.message
+                : "家族キーを削除できませんでした。"
+            );
+          }
+        }
         setTone("error");
         setMessage(error instanceof Error ? error.message : "読み込みに失敗しました。");
       });
-  }, []);
+  }, [onFamilyKeyReset]);
 
   const save = async () => {
     setBusy(true);
