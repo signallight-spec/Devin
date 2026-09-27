@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createBrowserTimerEffects } from "../timerEffects";
 
 const TIMER_END_STORAGE = "study-habit-timer-ends-at";
 
 export function useTimer(goalMinutes: number) {
+  const [effects] = useState(createBrowserTimerEffects);
   const [endsAt, setEndsAt] = useState<number | null>(() => {
     const stored = Number(localStorage.getItem(TIMER_END_STORAGE));
     return Number.isFinite(stored) && stored > 0 ? stored : null;
   });
   const [now, setNow] = useState(Date.now());
+  const completionSoundEndsAt = useRef<number | null>(
+    endsAt !== null && endsAt <= Date.now() ? endsAt : null
+  );
 
   useEffect(() => {
     if (!endsAt) {
@@ -33,22 +38,55 @@ export function useTimer(goalMinutes: number) {
     [endsAt, goalMinutes, now]
   );
   const completed = endsAt !== null && remainingSeconds === 0;
+  const active = endsAt !== null && !completed;
+
+  useEffect(() => {
+    if (!active) {
+      void effects.releaseWakeLock();
+      return;
+    }
+    void effects.keepScreenAwake();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void effects.keepScreenAwake();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      void effects.releaseWakeLock();
+    };
+  }, [active, effects]);
+
+  useEffect(() => {
+    if (!completed || endsAt === null || completionSoundEndsAt.current === endsAt) {
+      return;
+    }
+    completionSoundEndsAt.current = endsAt;
+    void effects.playCompletionSound();
+  }, [completed, effects, endsAt]);
+
+  useEffect(() => () => {
+    void effects.stop();
+  }, [effects]);
 
   const start = useCallback(() => {
+    void effects.unlockAudio();
     const nextEndsAt = Date.now() + goalMinutes * 60 * 1000;
     localStorage.setItem(TIMER_END_STORAGE, String(nextEndsAt));
     setNow(Date.now());
     setEndsAt(nextEndsAt);
-  }, [goalMinutes]);
+  }, [effects, goalMinutes]);
 
   const reset = useCallback(() => {
+    void effects.stop();
     localStorage.removeItem(TIMER_END_STORAGE);
     setEndsAt(null);
     setNow(Date.now());
-  }, []);
+  }, [effects]);
 
   return {
-    active: endsAt !== null && !completed,
+    active,
     completed,
     remainingSeconds,
     start,
