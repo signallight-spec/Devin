@@ -134,6 +134,9 @@ export class TimerEffects {
   async releaseWakeLock(): Promise<void> {
     this.wakeLockWanted = false;
     await this.wakeLockRequest;
+    if (this.wakeLockWanted) {
+      return;
+    }
     const wakeLock = this.wakeLock;
     this.wakeLock = null;
     if (wakeLock && !wakeLock.released) {

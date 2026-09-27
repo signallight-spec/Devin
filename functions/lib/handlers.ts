@@ -99,6 +99,28 @@ function isNotificationTime(value: string): boolean {
   return Boolean(match && Number(match[2]) % 5 === 0);
 }
 
+function parseAchievementCursor(cursor: string): {
+  achievedAt: string;
+  id: string;
+} {
+  const separator = cursor.lastIndexOf("|");
+  const achievedAt = cursor.slice(0, separator);
+  const id = cursor.slice(separator + 1);
+  if (
+    cursor.length > 256 ||
+    separator < 1 ||
+    id.length === 0 ||
+    Number.isNaN(Date.parse(achievedAt))
+  ) {
+    throw new HttpError(400, "INVALID_INPUT", "cursorが正しくありません。");
+  }
+  return { achievedAt, id };
+}
+
+function achievementCursor(row: AchievementRow): string {
+  return `${row.achieved_at_utc}|${row.id}`;
+}
+
 function requireRule(
   row: AllowanceRuleRow | null
 ): asserts row is AllowanceRuleRow {
@@ -302,6 +324,9 @@ function subscriptionValues(body: Record<string, unknown>): {
   if (
     parsedEndpoint.protocol !== "https:" ||
     parsedEndpoint.port !== "" ||
+    parsedEndpoint.username !== "" ||
+    parsedEndpoint.password !== "" ||
+    parsedEndpoint.hash !== "" ||
     (!PUSH_SERVICE_HOSTS.has(parsedEndpoint.hostname) &&
       !(
         CHROME_PUSH_SERVICE_HOST_PATTERN.test(parsedEndpoint.hostname) &&
@@ -314,7 +339,7 @@ function subscriptionValues(body: Record<string, unknown>): {
   ) {
     throw new HttpError(400, "INVALID_INPUT", "通知先が正しくありません。");
   }
-  return { endpoint, p256dh, auth, deviceId };
+  return { endpoint: parsedEndpoint.href, p256dh, auth, deviceId };
 }
 
 async function handlePushSubscriptionPost(
@@ -385,10 +410,18 @@ async function handleCreateAchievement(
   }
   const subject = optionalTrimmedString(body, "subject", 20);
   const note = optionalTrimmedString(body, "note", 120);
-  const targetMinutes =
+  const requestedTargetMinutes =
     method === "timer"
-      ? integerInRange(body, "targetMinutes", 1, 180)
+      ? integerInRange(body, "targetMinutes", 5, 180)
       : settings.goal_minutes;
+  if (!isGoalMinutes(requestedTargetMinutes)) {
+    throw new HttpError(
+      400,
+      "INVALID_INPUT",
+      "targetMinutesは5分刻みにしてください。"
+    );
+  }
+  const targetMinutes = requestedTargetMinutes;
   const today = localDateInTokyo(now);
   const existing = await env.DB
     .prepare(`${ACHIEVEMENT_WITH_PAID} WHERE a.local_date = ? LIMIT 1`)
@@ -610,17 +643,17 @@ async function handleParentSession(
       `${PIN_LOCK_MINUTES}分後にもう一度試してください。`
     );
   }
+  if (
+    attempt.pin_locked_until_utc &&
+    Date.parse(attempt.pin_locked_until_utc) > now.getTime()
+  ) {
+    throw new HttpError(
+      429,
+      "PIN_LOCKED",
+      `${PIN_LOCK_MINUTES}分後にもう一度試してください。`
+    );
+  }
   if (!(await verifyPin(pin, attempt.pin_hash))) {
-    if (
-      attempt.pin_locked_until_utc &&
-      Date.parse(attempt.pin_locked_until_utc) > now.getTime()
-    ) {
-      throw new HttpError(
-        429,
-        "PIN_LOCKED",
-        `${PIN_LOCK_MINUTES}分後にもう一度試してください。`
-      );
-    }
     throw new HttpError(403, "INVALID_PIN", "PINが正しくありません。");
   }
   await env.DB
@@ -705,7 +738,8 @@ async function handleNotificationSettingsUpdate(
 }
 
 async function handleParentAchievements(url: URL, env: Env): Promise<Response> {
-  const cursor = url.searchParams.get("cursor");
+  const cursorText = url.searchParams.get("cursor");
+  const cursor = cursorText ? parseAchievementCursor(cursorText) : null;
   const limitText = url.searchParams.get("limit");
   const limit = limitText === null ? 50 : Number(limitText);
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
@@ -716,14 +750,15 @@ async function handleParentAchievements(url: URL, env: Env): Promise<Response> {
         .prepare(
           `${ACHIEVEMENT_WITH_PAID}
            WHERE a.achieved_at_utc < ?
-           ORDER BY a.achieved_at_utc DESC
+              OR (a.achieved_at_utc = ? AND a.id < ?)
+           ORDER BY a.achieved_at_utc DESC, a.id DESC
            LIMIT ?`
         )
-        .bind(cursor, limit)
+        .bind(cursor.achievedAt, cursor.achievedAt, cursor.id, limit)
     : env.DB
         .prepare(
           `${ACHIEVEMENT_WITH_PAID}
-           ORDER BY a.achieved_at_utc DESC
+           ORDER BY a.achieved_at_utc DESC, a.id DESC
            LIMIT ?`
         )
         .bind(limit);
@@ -731,7 +766,9 @@ async function handleParentAchievements(url: URL, env: Env): Promise<Response> {
   const last = rows.results.at(-1);
   return json({
     items: rows.results.map(mapAchievement),
-    nextCursor: rows.results.length === limit && last ? last.achieved_at_utc : null
+    nextCursor: rows.results.length === limit && last
+      ? achievementCursor(last)
+      : null
   });
 }
 
@@ -905,7 +942,10 @@ async function handleSettle(
 
 function csvCell(value: string | number | null): string {
   const text = value === null ? "" : String(value);
-  const safeText = text.replace(/(^|[\r\n])([=+\-@\t])/g, "$1'$2");
+  const safeText = text.replace(
+    /(^|[\r\n])([ \f\v\u00a0]*)([=+\-@\t])/g,
+    "$1$2'$3"
+  );
   return `"${safeText.replace(/"/g, '""')}"`;
 }
 

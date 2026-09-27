@@ -9,9 +9,12 @@ const migrationsDirectory = resolve(
   "../migrations"
 );
 
-function applyMigrations(database: DatabaseSync): void {
+function applyMigrations(
+  database: DatabaseSync,
+  include: (file: string) => boolean = () => true
+): void {
   for (const file of readdirSync(migrationsDirectory).sort()) {
-    if (file.endsWith(".sql")) {
+    if (file.endsWith(".sql") && include(file)) {
       database.exec(readFileSync(resolve(migrationsDirectory, file), "utf8"));
     }
   }
@@ -19,8 +22,8 @@ function applyMigrations(database: DatabaseSync): void {
 
 let database: DatabaseSync;
 
-function insertSetup(): void {
-  database.exec(`
+function insertSetup(target = database): void {
+  target.exec(`
     INSERT INTO app_settings (
       id, timezone, goal_minutes, family_key_hash, pin_hash,
       created_at_utc, updated_at_utc
@@ -39,8 +42,13 @@ function insertSetup(): void {
   `);
 }
 
-function insertAchievement(id: string, localDate: string, amount = 100): void {
-  database
+function insertAchievement(
+  id: string,
+  localDate: string,
+  amount = 100,
+  target = database
+): void {
+  target
     .prepare(`
       INSERT INTO achievements (
         id, local_date, method, subject, note, target_minutes, streak_days,
@@ -62,6 +70,43 @@ afterEach(() => {
 });
 
 describe("D1スキーマ", () => {
+  it("既存の達成記録を保持したまま小遣いルール順序を移行する", () => {
+    const upgrade = new DatabaseSync(":memory:");
+    try {
+      applyMigrations(upgrade, (file) => file < "0006_zz");
+      insertSetup(upgrade);
+      insertAchievement("existing", "2026-09-23", 100, upgrade);
+      upgrade.exec(`
+        INSERT INTO payments (
+          id, idempotency_key, amount_yen,
+          period_start_date, period_end_date, paid_at_utc
+        ) VALUES (
+          'existing-payment', 'existing-idempotency-key', 100,
+          '2026-09-23', '2026-09-23', '2026-09-24T00:00:00.000Z'
+        );
+        INSERT INTO payment_achievements (payment_id, achievement_id)
+        VALUES ('existing-payment', 'existing');
+      `);
+      applyMigrations(upgrade, (file) => file >= "0006_zz");
+
+      expect(upgrade.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      expect(
+        upgrade
+          .prepare(
+            `SELECT a.id, r.base_amount_yen
+             FROM achievements a
+             JOIN allowance_rules r ON r.id = a.allowance_rule_id`
+          )
+          .get()
+      ).toEqual({ id: "existing", base_amount_yen: 100 });
+      expect(
+        upgrade.prepare("SELECT * FROM unpaid_achievements").all()
+      ).toEqual([]);
+    } finally {
+      upgrade.close();
+    }
+  });
+
   it("同じ日本日付の達成を2件作れない", () => {
     insertAchievement("a1", "2026-09-23");
     expect(() => insertAchievement("a2", "2026-09-23")).toThrow();

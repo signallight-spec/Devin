@@ -125,6 +125,23 @@ describe("TimerEffects", () => {
     expect(wakeLock.release).toHaveBeenCalledOnce();
   });
 
+  it("keeps the wake lock when a timer restarts during release", async () => {
+    const wakeLock = wakeLockFixture();
+    const requestWakeLock = vi.fn(async () => wakeLock);
+    const effects = new TimerEffects({
+      createAudioContext: null,
+      requestWakeLock
+    });
+
+    await effects.keepScreenAwake();
+    const release = effects.releaseWakeLock();
+    const restart = effects.keepScreenAwake();
+    await Promise.all([release, restart]);
+
+    expect(requestWakeLock).toHaveBeenCalledOnce();
+    expect(wakeLock.release).not.toHaveBeenCalled();
+  });
+
   it("keeps the timer usable when browser effects are unsupported", async () => {
     const effects = new TimerEffects({
       createAudioContext: null,

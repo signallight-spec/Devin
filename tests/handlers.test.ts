@@ -314,6 +314,53 @@ describe("APIハンドラー", () => {
     }
   });
 
+  it("Push通知先を正規化し認証情報やフラグメントを拒否する", async () => {
+    const input = {
+      endpoint: "https://FCM.GOOGLEAPIS.COM/fcm/send/subscription-id",
+      p256dh: "client-public-key",
+      auth: "auth-secret",
+      deviceId: "44444444-4444-4444-8444-444444444444"
+    };
+    const created = await handleApi(
+      request(
+        "/push/subscriptions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input)
+        },
+        familyKey
+      ),
+      env
+    );
+    const saved = testD1.sqlite
+      .prepare("SELECT endpoint FROM push_subscriptions WHERE device_id = ?")
+      .get(input.deviceId) as { endpoint: string };
+
+    expect(created.status).toBe(204);
+    expect(saved.endpoint).toBe(
+      "https://fcm.googleapis.com/fcm/send/subscription-id"
+    );
+
+    for (const endpoint of [
+      "https://user@fcm.googleapis.com/fcm/send/subscription-id",
+      "https://fcm.googleapis.com/fcm/send/subscription-id#fragment"
+    ]) {
+      const rejected = await handleRequest(
+        request(
+          "/push/subscriptions",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...input, endpoint })
+          },
+          familyKey
+        )
+      );
+      expect(rejected.status).toBe(400);
+    }
+  });
+
   it("家族キー再発行は確認まで旧キーと新キーの両方を受け付ける", async () => {
     const token = await parentToken();
     const newFamilyKey = "B".repeat(43);
@@ -668,6 +715,24 @@ describe("APIハンドラー", () => {
     expect(body.achievement.targetMinutes).toBe(25);
   });
 
+  it("5分刻みでないタイマー時間を入力エラーにする", async () => {
+    const rejected = await handleRequest(
+      request(
+        "/achievements",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ method: "timer", targetMinutes: 6 })
+        },
+        familyKey
+      )
+    );
+    const body = await responseJson<{ error: { code: string } }>(rejected);
+
+    expect(rejected.status).toBe(400);
+    expect(body.error.code).toBe("INVALID_INPUT");
+  });
+
   it("7日目の達成へボーナスを付ける", async () => {
     const today = localDateInTokyo(new Date());
     const insert = testD1.sqlite.prepare(`
@@ -813,6 +878,48 @@ describe("APIハンドラー", () => {
     expect(currentRule?.base_amount_yen).toBe(200);
   });
 
+  it("同じ達成時刻の履歴を複合cursorで欠落なく取得する", async () => {
+    testD1.sqlite.exec(`
+      INSERT INTO achievements (
+        id, local_date, method, target_minutes, streak_days,
+        base_amount_yen, bonus_amount_yen, total_amount_yen,
+        allowance_rule_id, achieved_at_utc
+      ) VALUES
+        ('achievement-a', '2026-09-20', 'timer', 25, 1,
+         100, 0, 100, 1, '2026-09-23T00:00:00.000Z'),
+        ('achievement-b', '2026-09-21', 'timer', 25, 2,
+         100, 0, 100, 1, '2026-09-23T00:00:00.000Z');
+    `);
+    const token = await parentToken();
+    const firstResponse = await handleApi(
+      request("/parent/achievements?limit=1", {}, familyKey, token),
+      env
+    );
+    const first = await responseJson<{
+      items: Array<{ id: string }>;
+      nextCursor: string;
+    }>(firstResponse);
+    const secondResponse = await handleApi(
+      request(
+        `/parent/achievements?limit=1&cursor=${encodeURIComponent(first.nextCursor)}`,
+        {},
+        familyKey,
+        token
+      ),
+      env
+    );
+    const second = await responseJson<{
+      items: Array<{ id: string }>;
+    }>(secondResponse);
+
+    expect(first.items).toEqual([
+      expect.objectContaining({ id: "achievement-b" })
+    ]);
+    expect(second.items).toEqual([
+      expect.objectContaining({ id: "achievement-a" })
+    ]);
+  });
+
   it("支払いを冪等に一括精算する", async () => {
     await handleApi(
       request(
@@ -916,7 +1023,7 @@ describe("APIハンドラー", () => {
           body: JSON.stringify({
             method: "self_report",
             subject: "=SUM(A1:A2)",
-            note: "一行目\n@IMPORTXML(\"https://example.test\")"
+            note: "一行目\n  @IMPORTXML(\"https://example.test\")"
           })
         },
         familyKey
@@ -933,7 +1040,7 @@ describe("APIハンドラー", () => {
     expect(response.status).toBe(200);
     expect(csv).toContain("\"'=SUM(A1:A2)\"");
     expect(csv).toContain(
-      "\"一行目\n'@IMPORTXML(\"\"https://example.test\"\")\""
+      "\"一行目\n  '@IMPORTXML(\"\"https://example.test\"\")\""
     );
   });
 
@@ -1054,6 +1161,27 @@ describe("APIハンドラー", () => {
       pin_failed_attempts: 0,
       pin_locked_until_utc: null
     });
+  });
+
+  it("5回目の試行が正しいPINでもロックを回避できない", async () => {
+    testD1.sqlite.exec(`
+      UPDATE app_settings
+      SET pin_failed_attempts = 4, pin_locked_until_utc = NULL
+      WHERE id = 1
+    `);
+    const response = await handleRequest(
+      request(
+        "/parent/session",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: "1234" })
+        },
+        familyKey
+      )
+    );
+
+    expect(response.status).toBe(429);
   });
 
   it("期限切れPINロック後の誤入力は失敗回数を1から数え直す", async () => {
