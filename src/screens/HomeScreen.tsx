@@ -91,6 +91,7 @@ export function HomeScreen({
 }) {
   const [today, setToday] = useState<Today | null>(null);
   const [recordMethod, setRecordMethod] = useState<"timer" | "self_report" | null>(null);
+  const [timerMessage, setTimerMessage] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [keyResetBusy, setKeyResetBusy] = useState(false);
@@ -266,7 +267,19 @@ export function HomeScreen({
           {timerText(timer.remainingSeconds)}
         </div>
         {!timer.active ? (
-          <button className="primary-button big" onClick={timer.start} type="button">
+          <button
+            className="primary-button big"
+            onClick={() => {
+              if (timer.start()) {
+                setTimerMessage("");
+              } else {
+                setTimerMessage(
+                  "今日中に終わる時間が足りません。明日タイマーを使うか、「今日やった」から記録してください。"
+                );
+              }
+            }}
+            type="button"
+          >
             タイマーを始める
           </button>
         ) : (
@@ -274,6 +287,7 @@ export function HomeScreen({
             タイマーをやめる
           </button>
         )}
+        <StatusMessage message={timerMessage} />
       </section>
       <section className="card self-report-card">
         <div>

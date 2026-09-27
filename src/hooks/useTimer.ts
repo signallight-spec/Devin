@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { localDateInTokyo } from "../../shared/domain";
+import {
+  localDateInTokyo,
+  timerCanFinishToday
+} from "../../shared/domain";
 import { createBrowserTimerEffects } from "../timerEffects";
 import {
   parsePersistedTimer,
@@ -14,7 +17,7 @@ export interface StudyTimer {
   completed: boolean;
   remainingSeconds: number;
   targetMinutes: number | null;
-  start: () => void;
+  start: () => boolean;
   reset: () => void;
 }
 
@@ -101,8 +104,11 @@ export function useTimer(goalMinutes: number): StudyTimer {
   }, [effects, eligibleTimer, timerState]);
 
   const start = useCallback(() => {
-    void effects.unlockAudio();
     const startedAt = new Date();
+    if (!timerCanFinishToday(startedAt, goalMinutes)) {
+      return false;
+    }
+    void effects.unlockAudio();
     const nextTimerState = {
       endsAt: startedAt.getTime() + goalMinutes * 60 * 1000,
       localDate: localDateInTokyo(startedAt),
@@ -114,6 +120,7 @@ export function useTimer(goalMinutes: number): StudyTimer {
     );
     setNow(startedAt.getTime());
     setTimerState(nextTimerState);
+    return true;
   }, [effects, goalMinutes]);
 
   const reset = useCallback(() => {

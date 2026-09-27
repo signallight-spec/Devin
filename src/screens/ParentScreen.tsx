@@ -14,6 +14,7 @@ import {
 import { StatusMessage } from "../components/StatusMessage";
 import { FamilyKeyQrCode } from "../components/FamilyKeyQrCode";
 import { dateTime, shortDate, yen } from "../format";
+import { syncExistingPushSubscription } from "../push";
 import type {
   Achievement,
   AllowanceRule,
@@ -101,6 +102,17 @@ export function ParentScreen() {
     time: "20:00"
   });
 
+  const expireParentSession = useCallback((error: unknown): boolean => {
+    if (!(error instanceof ApiError) || error.status !== 403) {
+      return false;
+    }
+    clearParentToken();
+    setTone("error");
+    setMessage("親ページの有効期限が切れました。PINをもう一度入力してください。");
+    setAuthenticated(false);
+    return true;
+  }, []);
+
   const load = useCallback(async (
     options: {
       preserveMessage?: boolean;
@@ -128,14 +140,7 @@ export function ParentScreen() {
       });
       setNotificationForm(nextDashboard.notificationSettings);
     } catch (error) {
-      if (
-        error instanceof Error &&
-        ("status" in error && (error as { status: unknown }).status === 403)
-      ) {
-        clearParentToken();
-        setMessage("親ページの有効期限が切れました。PINをもう一度入力してください。");
-        setAuthenticated(false);
-      } else {
+      if (!expireParentSession(error)) {
         setTone(options.refreshFailureMessage ? "info" : "error");
         setMessage(
           options.refreshFailureMessage ??
@@ -143,7 +148,7 @@ export function ParentScreen() {
         );
       }
     }
-  }, []);
+  }, [expireParentSession]);
 
   useEffect(() => {
     if (authenticated) {
@@ -158,8 +163,10 @@ export function ParentScreen() {
     try {
       payment = await api.settle();
     } catch (error) {
-      setTone("error");
-      setMessage(error instanceof Error ? error.message : "精算に失敗しました。");
+      if (!expireParentSession(error)) {
+        setTone("error");
+        setMessage(error instanceof Error ? error.message : "精算に失敗しました。");
+      }
       setBusy(false);
       return;
     }
@@ -195,14 +202,10 @@ export function ParentScreen() {
       setTone("success");
       setMessage("CSVを保存しました。");
     } catch (error) {
-      if (error instanceof ApiError && error.status === 403) {
-        clearParentToken();
-        setMessage("親ページの有効期限が切れました。PINをもう一度入力してください。");
-        setAuthenticated(false);
-        return;
+      if (!expireParentSession(error)) {
+        setTone("error");
+        setMessage(error instanceof Error ? error.message : "CSV出力に失敗しました。");
       }
-      setTone("error");
-      setMessage(error instanceof Error ? error.message : "CSV出力に失敗しました。");
     } finally {
       setBusy(false);
     }
@@ -215,8 +218,10 @@ export function ParentScreen() {
     try {
       rule = await api.createRule(ruleForm);
     } catch (error) {
-      setTone("error");
-      setMessage(error instanceof Error ? error.message : "保存に失敗しました。");
+      if (!expireParentSession(error)) {
+        setTone("error");
+        setMessage(error instanceof Error ? error.message : "保存に失敗しました。");
+      }
       setBusy(false);
       return;
     }
@@ -256,8 +261,10 @@ export function ParentScreen() {
           : "未達通知をOFFにしました。"
       );
     } catch (error) {
-      setTone("error");
-      setMessage(error instanceof Error ? error.message : "通知設定に失敗しました。");
+      if (!expireParentSession(error)) {
+        setTone("error");
+        setMessage(error instanceof Error ? error.message : "通知設定に失敗しました。");
+      }
     } finally {
       setBusy(false);
     }
@@ -271,24 +278,37 @@ export function ParentScreen() {
     setMessage("");
     const currentFamilyKey = getFamilyKey();
     const newFamilyKey = generateFamilyKey();
-    const showPendingRotation = (familyKey: string) => {
+    const showPendingRotation = async (familyKey: string) => {
       setPendingRotatedKey(familyKey);
       setFamilyKey(familyKey);
       setRotatedKey(familyKey);
       setPendingFamilyKey(familyKey);
       setShowFamilyKeyQr(true);
-      setTone("success");
-      setMessage(
-        "新しい家族キーを保存して、もう1台へ登録してから古いキーを無効化してください。"
-      );
+      try {
+        await syncExistingPushSubscription(familyKey);
+        setTone("success");
+        setMessage(
+          "新しい家族キーを保存して、もう1台へ登録してから古いキーを無効化してください。"
+        );
+      } catch (error) {
+        setTone("error");
+        setMessage(
+          error instanceof Error
+            ? `新しい家族キーは発行済みですが、この端末の通知登録を同期できませんでした。古いキーを無効化する前に再試行してください。${error.message}`
+            : "新しい家族キーは発行済みですが、この端末の通知登録を同期できませんでした。古いキーを無効化する前に再試行してください。"
+        );
+      }
     };
     try {
       const result = await api.rotateFamilyKey(newFamilyKey, currentFamilyKey);
-      showPendingRotation(result.familyKey);
+      await showPendingRotation(result.familyKey);
     } catch (error) {
+      if (expireParentSession(error)) {
+        return;
+      }
       try {
         await api.validateFamilyKey(newFamilyKey);
-        showPendingRotation(newFamilyKey);
+        await showPendingRotation(newFamilyKey);
         return;
       } catch {
         setFamilyKey(currentFamilyKey);
@@ -305,6 +325,18 @@ export function ParentScreen() {
     setBusy(true);
     setMessage("");
     try {
+      await syncExistingPushSubscription(pendingFamilyKey);
+    } catch (error) {
+      setTone("error");
+      setMessage(
+        error instanceof Error
+          ? `この端末の通知登録を確認できなかったため、古い家族キーは無効化していません。${error.message}`
+          : "この端末の通知登録を確認できなかったため、古い家族キーは無効化していません。"
+      );
+      setBusy(false);
+      return;
+    }
+    try {
       await api.confirmFamilyKey(pendingFamilyKey);
       clearPendingRotatedKey();
       setPendingFamilyKey("");
@@ -312,12 +344,14 @@ export function ParentScreen() {
       setTone("success");
       setMessage("古い家族キーを無効化しました。");
     } catch (error) {
-      setTone("error");
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "古い家族キーの無効化に失敗しました。"
-      );
+      if (!expireParentSession(error)) {
+        setTone("error");
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "古い家族キーの無効化に失敗しました。"
+        );
+      }
     } finally {
       setBusy(false);
     }
@@ -332,8 +366,10 @@ export function ParentScreen() {
       setAuthenticated(false);
       setNewPin("");
     } catch (error) {
-      setTone("error");
-      setMessage(error instanceof Error ? error.message : "PIN変更に失敗しました。");
+      if (!expireParentSession(error)) {
+        setTone("error");
+        setMessage(error instanceof Error ? error.message : "PIN変更に失敗しました。");
+      }
     } finally {
       setBusy(false);
     }

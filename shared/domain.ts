@@ -63,6 +63,13 @@ export function millisecondsUntilNextTokyoDay(date: Date): number {
   return Math.max(0, nextMidnightUtc - date.getTime());
 }
 
+export function timerCanFinishToday(
+  date: Date,
+  goalMinutes: number
+): boolean {
+  return goalMinutes * 60 * 1000 < millisecondsUntilNextTokyoDay(date);
+}
+
 export function mondayWeekRange(localDate: string): {
   start: string;
   end: string;

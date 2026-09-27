@@ -17,7 +17,8 @@ npm run db:migrate
 npm run pages:dev
 ```
 
-`generate:vapid` の出力を `.dev.vars` の同名3項目へ設定してください。
+`generate:vapid` はVAPID鍵を`.dev.vars`へ直接保存し、秘密鍵を画面へ表示しません。
+既存の秘密鍵がある場合は端末登録を守るため再生成せず終了します。
 初回だけ `POST /api/setup` に `.dev.vars` の `BOOTSTRAP_TOKEN` を
 `X-Bootstrap-Token` ヘッダーとして付け、4桁PINを設定します。
 画面の「初めての1台を設定する」からも実行できます。完了時に1回だけ表示される
@@ -46,14 +47,14 @@ npm run build
 
 ## Android未達通知
 
-1. `npm run generate:vapid` でVAPID鍵を最初に1組だけ生成し、安全な場所へ保存する。
+1. `npm run generate:vapid` でVAPID鍵を最初に1組だけ`.dev.vars`へ生成する。
 2. `wrangler.notifications.toml` のD1 IDを `wrangler.toml` と同じ値へ置き換える。
 3. 通知Workerへ3つのSecretを登録する。
 
 ```bash
-npx wrangler secret put VAPID_PUBLIC_KEY --config wrangler.notifications.toml
-npx wrangler secret put VAPID_PRIVATE_KEY --config wrangler.notifications.toml
-npx wrangler secret put VAPID_SUBJECT --config wrangler.notifications.toml
+sed -n 's/^VAPID_PUBLIC_KEY=//p' .dev.vars | npx wrangler secret put VAPID_PUBLIC_KEY --config wrangler.notifications.toml
+sed -n 's/^VAPID_PRIVATE_KEY=//p' .dev.vars | npx wrangler secret put VAPID_PRIVATE_KEY --config wrangler.notifications.toml
+sed -n 's/^VAPID_SUBJECT=//p' .dev.vars | npx wrangler secret put VAPID_SUBJECT --config wrangler.notifications.toml
 npm run notifications:deploy
 ```
 

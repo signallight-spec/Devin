@@ -9,6 +9,12 @@ import {
   syncPushSubscription
 } from "../push";
 
+type PushRegistrationState =
+  | "checking"
+  | "disabled"
+  | "enabled"
+  | "sync_failed";
+
 export function SettingsScreen({
   onFamilyKeyReset
 }: {
@@ -21,7 +27,8 @@ export function SettingsScreen({
     available: false,
     publicKey: null as string | null
   });
-  const [subscribed, setSubscribed] = useState(false);
+  const [pushState, setPushState] =
+    useState<PushRegistrationState>("checking");
   const [message, setMessage] = useState("");
   const [tone, setTone] = useState<"error" | "success">("success");
   const [pushMessage, setPushMessage] = useState("");
@@ -36,14 +43,19 @@ export function SettingsScreen({
         setNotification(today.notification);
         try {
           const subscription = await currentPushSubscription();
-          setSubscribed(Boolean(subscription));
           if (subscription) {
             await syncPushSubscription(subscription);
+            setPushState("enabled");
+          } else {
+            setPushState("disabled");
           }
         } catch (error) {
+          setPushState("sync_failed");
           setPushTone("error");
           setPushMessage(
-            error instanceof Error ? error.message : "通知設定の読み込みに失敗しました。"
+            error instanceof Error
+              ? `通知登録を同期できませんでした。再試行してください。${error.message}`
+              : "通知登録を同期できませんでした。再試行してください。"
           );
         }
       })
@@ -85,21 +97,36 @@ export function SettingsScreen({
     setPushBusy(true);
     setPushMessage("");
     try {
-      if (subscribed) {
+      if (pushState === "enabled") {
         await disablePushNotifications();
-        setSubscribed(false);
+        setPushState("disabled");
         setPushTone("success");
         setPushMessage("この端末の通知を解除しました。");
       } else {
-        if (!notification.publicKey) {
-          throw new Error("通知用の設定がまだ完了していません。");
+        const existing =
+          pushState === "sync_failed"
+            ? await currentPushSubscription()
+            : null;
+        if (existing) {
+          await syncPushSubscription(existing);
+        } else {
+          if (!notification.publicKey) {
+            throw new Error("通知用の設定がまだ完了していません。");
+          }
+          await enablePushNotifications(notification.publicKey);
         }
-        await enablePushNotifications(notification.publicKey);
-        setSubscribed(true);
+        setPushState("enabled");
         setPushTone("success");
-        setPushMessage("このAndroid端末で通知を受け取ります。");
+        setPushMessage(
+          pushState === "sync_failed"
+            ? "このAndroid端末の通知登録を再同期しました。"
+            : "このAndroid端末で通知を受け取ります。"
+        );
       }
     } catch (error) {
+      if (pushState !== "enabled") {
+        setPushState("sync_failed");
+      }
       setPushTone("error");
       setPushMessage(
         error instanceof Error ? error.message : "通知設定に失敗しました。"
@@ -171,16 +198,24 @@ export function SettingsScreen({
           <p className="quiet-note">このブラウザはWeb Pushに対応していません。</p>
         ) : (
           <button
-            className={subscribed ? "secondary-button" : "primary-button"}
-            disabled={pushBusy || (!subscribed && !notification.available)}
+            className={
+              pushState === "enabled" ? "secondary-button" : "primary-button"
+            }
+            disabled={
+              pushBusy ||
+              pushState === "checking" ||
+              (pushState === "disabled" && !notification.available)
+            }
             onClick={togglePush}
             type="button"
           >
             {pushBusy
               ? "設定中…"
-              : subscribed
+              : pushState === "enabled"
                 ? "この端末の通知を解除"
-                : "この端末で通知を受け取る"}
+                : pushState === "sync_failed"
+                  ? "通知登録を再試行"
+                  : "この端末で通知を受け取る"}
           </button>
         )}
         <StatusMessage message={pushMessage} tone={pushTone} />

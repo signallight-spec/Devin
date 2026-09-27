@@ -7,7 +7,8 @@ import {
   displayedStreak,
   localDateInTokyo,
   millisecondsUntilNextTokyoDay,
-  mondayWeekRange
+  mondayWeekRange,
+  timerCanFinishToday
 } from "../shared/domain";
 import { shortDate } from "../src/format";
 
@@ -28,6 +29,15 @@ describe("学習記録の計算", () => {
     expect(
       millisecondsUntilNextTokyoDay(new Date("2026-09-24T15:00:00.000Z"))
     ).toBe(24 * 60 * 60 * 1_000);
+  });
+
+  it("東京日付を跨ぐタイマー開始を防ぐ", () => {
+    expect(
+      timerCanFinishToday(new Date("2026-09-23T14:34:59.000Z"), 25)
+    ).toBe(true);
+    expect(
+      timerCanFinishToday(new Date("2026-09-23T14:35:00.000Z"), 25)
+    ).toBe(false);
   });
 
   it("前日に達成していれば連続日数を増やす", () => {
