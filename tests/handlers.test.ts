@@ -729,6 +729,58 @@ describe("APIハンドラー", () => {
     expect(rejected.status).toBe(400);
   });
 
+  it("同じミリ秒の小遣いルール保存を順番に記録する", async () => {
+    const token = await parentToken();
+    const initialRule = testD1.sqlite
+      .prepare(
+        `SELECT effective_from_utc
+         FROM allowance_rules
+         ORDER BY effective_from_utc DESC
+         LIMIT 1`
+      )
+      .get() as { effective_from_utc: string };
+    const now = new Date(initialRule.effective_from_utc);
+    for (const baseAmountYen of [150, 200]) {
+      const response = await handleApi(
+        request(
+          "/parent/allowance-rules",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              baseAmountYen,
+              bonusAmountYen: 500
+            })
+          },
+          familyKey,
+          token
+        ),
+        env,
+        now
+      );
+      expect(response.status).toBe(201);
+    }
+
+    const rules = testD1.sqlite
+      .prepare(
+        `SELECT base_amount_yen, effective_from_utc
+         FROM allowance_rules
+         WHERE base_amount_yen IN (150, 200)
+         ORDER BY effective_from_utc`
+      )
+      .all();
+    expect(rules).toEqual([
+      {
+        base_amount_yen: 150,
+        effective_from_utc: new Date(now.getTime() + 1).toISOString()
+      },
+      {
+        base_amount_yen: 200,
+        effective_from_utc: new Date(now.getTime() + 2).toISOString()
+      }
+    ]);
+  });
+
   it("支払いを冪等に一括精算する", async () => {
     await handleApi(
       request(

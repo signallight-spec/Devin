@@ -747,12 +747,27 @@ async function handleRulesPost(
       `INSERT INTO allowance_rules
         (base_amount_yen, bonus_interval_days, bonus_amount_yen,
          effective_from_utc, created_at_utc)
-       VALUES (?, ?, ?, ?, ?)`
+       SELECT ?, ?, ?,
+         CASE
+           WHEN latest_effective_from_utc >= ?
+             THEN strftime(
+               '%Y-%m-%dT%H:%M:%fZ',
+               latest_effective_from_utc,
+               '+0.001 seconds'
+             )
+           ELSE ?
+         END,
+         ?
+       FROM (
+         SELECT MAX(effective_from_utc) AS latest_effective_from_utc
+         FROM allowance_rules
+       )`
     )
     .bind(
       baseAmountYen,
       BONUS_INTERVAL_DAYS,
       bonusAmountYen,
+      nowIso,
       nowIso,
       nowIso
     )
@@ -1070,11 +1085,14 @@ async function handlePinUpdate(
   return empty();
 }
 
-export async function handleApi(request: Request, env: Env): Promise<Response> {
+export async function handleApi(
+  request: Request,
+  env: Env,
+  now = new Date()
+): Promise<Response> {
   const url = new URL(request.url);
   const path = normalizedPath(url);
   const method = request.method.toUpperCase();
-  const now = new Date();
 
   if (path === "/setup" && method === "POST") {
     return handleSetup(request, env, now);
