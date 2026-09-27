@@ -3,7 +3,15 @@ import { createBrowserTimerEffects } from "../timerEffects";
 
 const TIMER_END_STORAGE = "study-habit-timer-ends-at";
 
-export function useTimer(goalMinutes: number) {
+export interface StudyTimer {
+  active: boolean;
+  completed: boolean;
+  remainingSeconds: number;
+  start: () => void;
+  reset: () => void;
+}
+
+export function useTimer(goalMinutes: number): StudyTimer {
   const [effects] = useState(createBrowserTimerEffects);
   const [endsAt, setEndsAt] = useState<number | null>(() => {
     const stored = Number(localStorage.getItem(TIMER_END_STORAGE));

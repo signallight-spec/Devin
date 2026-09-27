@@ -7,7 +7,7 @@ import { api } from "../api";
 import { CharacterCard } from "../components/Character";
 import { StatusMessage } from "../components/StatusMessage";
 import { timerText, yen } from "../format";
-import { useTimer } from "../hooks/useTimer";
+import type { StudyTimer } from "../hooks/useTimer";
 import type { Today } from "../types";
 
 function RecordForm({
@@ -76,22 +76,27 @@ function RecordForm({
 }
 
 export function HomeScreen({
-  onInvalidKey
+  onGoalMinutesLoaded,
+  onInvalidKey,
+  timer
 }: {
+  onGoalMinutesLoaded: (goalMinutes: number) => void;
   onInvalidKey: () => Promise<void>;
+  timer: StudyTimer;
 }) {
   const [today, setToday] = useState<Today | null>(null);
   const [recordMethod, setRecordMethod] = useState<"timer" | "self_report" | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [keyResetBusy, setKeyResetBusy] = useState(false);
-  const timer = useTimer(today?.goalMinutes ?? 25);
 
   const load = useCallback(async () => {
     setLoading(true);
     setMessage("");
     try {
-      setToday(await api.today());
+      const nextToday = await api.today();
+      setToday(nextToday);
+      onGoalMinutesLoaded(nextToday.goalMinutes);
     } catch (error) {
       if (error instanceof Error) {
         setMessage(error.message);
@@ -99,7 +104,7 @@ export function HomeScreen({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onGoalMinutesLoaded]);
 
   useEffect(() => {
     void load();

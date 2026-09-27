@@ -12,6 +12,7 @@ import { ParentScreen } from "./screens/ParentScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { SetupScreen } from "./screens/SetupScreen";
 import { disconnectPushBeforeFamilyKeyRemoval } from "./push";
+import { useTimer } from "./hooks/useTimer";
 
 function pageFromHash(): Page {
   const value = window.location.hash.slice(1);
@@ -21,12 +22,14 @@ function pageFromHash(): Page {
   return "home";
 }
 
-export default function App() {
-  const [hasFamilyKey, setHasFamilyKey] = useState(Boolean(getFamilyKey()));
-  const [hasPendingSetupKey, setHasPendingSetupKey] = useState(
-    Boolean(getPendingSetupKey())
-  );
+function AuthenticatedApp({
+  onFamilyKeyReset
+}: {
+  onFamilyKeyReset: () => Promise<void>;
+}) {
   const [page, setPage] = useState<Page>(pageFromHash);
+  const [timerGoalMinutes, setTimerGoalMinutes] = useState(25);
+  const timer = useTimer(timerGoalMinutes);
 
   useEffect(() => {
     const onHashChange = () => setPage(pageFromHash());
@@ -39,6 +42,32 @@ export default function App() {
     setPage(nextPage);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  return (
+    <Layout onNavigate={navigate} page={page}>
+      {page === "home" && (
+        <HomeScreen
+          onGoalMinutesLoaded={setTimerGoalMinutes}
+          onInvalidKey={onFamilyKeyReset}
+          timer={timer}
+        />
+      )}
+      {page === "calendar" && <CalendarScreen />}
+      {page === "settings" && (
+        <SettingsScreen
+          onFamilyKeyReset={onFamilyKeyReset}
+        />
+      )}
+      {page === "parent" && <ParentScreen />}
+    </Layout>
+  );
+}
+
+export default function App() {
+  const [hasFamilyKey, setHasFamilyKey] = useState(Boolean(getFamilyKey()));
+  const [hasPendingSetupKey, setHasPendingSetupKey] = useState(
+    Boolean(getPendingSetupKey())
+  );
 
   const resetFamilyKey = useCallback(async () => {
     try {
@@ -66,20 +95,5 @@ export default function App() {
     );
   }
 
-  return (
-    <Layout onNavigate={navigate} page={page}>
-      {page === "home" && (
-        <HomeScreen
-          onInvalidKey={resetFamilyKey}
-        />
-      )}
-      {page === "calendar" && <CalendarScreen />}
-      {page === "settings" && (
-        <SettingsScreen
-          onFamilyKeyReset={resetFamilyKey}
-        />
-      )}
-      {page === "parent" && <ParentScreen />}
-    </Layout>
-  );
+  return <AuthenticatedApp onFamilyKeyReset={resetFamilyKey} />;
 }
