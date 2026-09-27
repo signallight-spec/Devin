@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildPushPayload } from "@block65/webcrypto-web-push";
 import notificationWorker, { processReminder } from "../notifications/worker";
 
 vi.mock("@block65/webcrypto-web-push", () => ({
@@ -372,6 +373,84 @@ describe("未達通知Worker", () => {
       )
       .get() as { count: number };
     expect(claimCount.count).toBe(0);
+  });
+
+  it("payload構築中に達成された場合は送信しない", async () => {
+    type PushPayload = Awaited<ReturnType<typeof buildPushPayload>>;
+    let resolvePayload!: (value: PushPayload) => void;
+    const payload = new Promise<PushPayload>((resolve) => {
+      resolvePayload = resolve;
+    });
+    vi.mocked(buildPushPayload).mockImplementationOnce(() => payload);
+
+    const reminder = processReminder(
+      env,
+      new Date("2026-09-23T11:05:00.000Z")
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    database.sqlite.exec(`
+      INSERT INTO allowance_rules (
+        base_amount_yen, bonus_interval_days, bonus_amount_yen,
+        effective_from_utc, created_at_utc
+      ) VALUES (
+        100, 7, 300,
+        '2026-09-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z'
+      );
+      INSERT INTO achievements (
+        id, local_date, method, target_minutes, streak_days,
+        base_amount_yen, bonus_amount_yen, total_amount_yen,
+        allowance_rule_id, achieved_at_utc
+      ) VALUES (
+        'finished-during-payload', '2026-09-23', 'timer', 25, 1,
+        100, 0, 100, 1, '2026-09-23T11:05:01.000Z'
+      );
+    `);
+    resolvePayload({
+      method: "POST",
+      headers: {
+        authorization: "vapid",
+        ttl: "3600",
+        "content-encoding": "aes128gcm",
+        "content-length": "1",
+        "content-type": "application/octet-stream"
+      },
+      body: new Uint8Array([1])
+    });
+
+    await expect(reminder).resolves.toBe(0);
+    expect(fetch).not.toHaveBeenCalled();
+    const claimCount = database.sqlite
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM notification_delivery_subscriptions`
+      )
+      .get() as { count: number };
+    expect(claimCount.count).toBe(0);
+  });
+
+  it("payload構築失敗後はclaimを解放して再試行する", async () => {
+    vi.mocked(buildPushPayload).mockRejectedValueOnce(
+      new Error("payload failure")
+    );
+    const now = new Date("2026-09-23T11:05:00.000Z");
+
+    await expect(processReminder(env, now)).resolves.toBe(0);
+    expect(fetch).not.toHaveBeenCalled();
+    await expect(
+      processReminder(env, new Date("2026-09-23T11:10:00.000Z"))
+    ).resolves.toBe(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("Push送信ではリダイレクトを追跡しない", async () => {
+    await expect(
+      processReminder(env, new Date("2026-09-23T11:05:00.000Z"))
+    ).resolves.toBe(1);
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://fcm.googleapis.com/fcm/send/test",
+      expect.objectContaining({ redirect: "manual" })
+    );
   });
 
   it("claim後に通知設定がOFFになった場合は送信しない", async () => {

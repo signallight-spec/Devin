@@ -103,18 +103,10 @@ export function SettingsScreen({
         setPushTone("success");
         setPushMessage("この端末の通知を解除しました。");
       } else {
-        const existing =
-          pushState === "sync_failed"
-            ? await currentPushSubscription()
-            : null;
-        if (existing) {
-          await syncPushSubscription(existing);
-        } else {
-          if (!notification.publicKey) {
-            throw new Error("通知用の設定がまだ完了していません。");
-          }
-          await enablePushNotifications(notification.publicKey);
+        if (!notification.publicKey) {
+          throw new Error("通知用の設定がまだ完了していません。");
         }
+        await enablePushNotifications(notification.publicKey);
         setPushState("enabled");
         setPushTone("success");
         setPushMessage(

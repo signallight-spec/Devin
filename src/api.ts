@@ -25,6 +25,14 @@ export class ApiError extends Error {
   }
 }
 
+export function isInvalidFamilyKeyError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 401 &&
+    error.code === "INVALID_FAMILY_KEY"
+  );
+}
+
 export function getFamilyKey(): string {
   return localStorage.getItem(FAMILY_KEY_STORAGE) ?? "";
 }
@@ -198,7 +206,15 @@ export const api = {
       try {
         await apiRequest<Today>("/today", {}, { familyKey: input.familyKey });
         return { familyKey: input.familyKey };
-      } catch {
+      } catch (validationError) {
+        if (
+          setupError instanceof ApiError &&
+          setupError.code === "ALREADY_SETUP" &&
+          isInvalidFamilyKeyError(validationError)
+        ) {
+          clearFamilyKey();
+          throw setupError;
+        }
         throw new Error(
           "初期設定の結果を確認できませんでした。同じ家族キーで再試行します。"
         );

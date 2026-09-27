@@ -24,10 +24,10 @@ interface SubscriptionRow {
   updated_at_utc: string;
 }
 
-async function sendNotification(
+async function buildNotificationPayload(
   subscription: SubscriptionRow,
   env: NotificationEnv
-): Promise<Response> {
+): Promise<RequestInit> {
   const pushSubscription: PushSubscription = {
     endpoint: subscription.endpoint,
     expirationTime: null,
@@ -36,7 +36,7 @@ async function sendNotification(
       auth: subscription.auth
     }
   };
-  const payload = await buildPushPayload(
+  return buildPushPayload(
     {
       data: JSON.stringify({
         title: "今日の学習はまだです",
@@ -55,7 +55,6 @@ async function sendNotification(
       privateKey: env.VAPID_PRIVATE_KEY
     }
   );
-  return fetch(subscription.endpoint, payload);
 }
 
 async function claimSubscription(
@@ -247,8 +246,39 @@ export async function processReminder(
         );
         return;
       }
+      let payload: RequestInit;
       try {
-        const response = await sendNotification(subscription, env);
+        payload = await buildNotificationPayload(subscription, env);
+      } catch {
+        await releaseSubscriptionClaim(
+          env,
+          timing.localDate,
+          subscription.device_id,
+          claimToken
+        );
+        return;
+      }
+      if (
+        await achievementExists(env, timing.localDate) ||
+        !(await notificationStillDue(
+          env,
+          timing.localDate,
+          currentTime()
+        ))
+      ) {
+        await releaseSubscriptionClaim(
+          env,
+          timing.localDate,
+          subscription.device_id,
+          claimToken
+        );
+        return;
+      }
+      try {
+        const response = await fetch(subscription.endpoint, {
+          ...payload,
+          redirect: "manual"
+        });
         if (response.ok) {
           const marked = await markSubscriptionResult(
             env,

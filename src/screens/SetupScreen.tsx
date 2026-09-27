@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   api,
+  clearFamilyKey,
   generateFamilyKey,
   getFamilyKey,
   getPendingSetupKey,
+  isInvalidFamilyKeyError,
   setFamilyKey
 } from "../api";
 import { StatusMessage } from "../components/StatusMessage";
@@ -68,7 +70,15 @@ export function SetupScreen({
       await api.validateFamilyKey(generatedKey);
       setSetupConfirmed(true);
       void syncExistingPushSubscription(generatedKey).catch(() => undefined);
-    } catch {
+    } catch (error) {
+      if (isInvalidFamilyKeyError(error)) {
+        clearFamilyKey();
+        setGeneratedKey("");
+        setMessage(
+          "この家族キーは登録されていません。使用中の家族キーを入力してください。"
+        );
+        return;
+      }
       setMessage(
         "初期設定の結果を確認できませんでした。家族キーを保存し、通信状態を確認して再試行してください。"
       );

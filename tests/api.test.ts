@@ -3,12 +3,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   api,
+  ApiError,
   clearPendingRotatedKey,
   consumeFamilyKeyFromHash,
   familyKeyFromHash,
   getFamilyKey,
   getPendingRotatedKey,
   getPendingSetupKey,
+  isInvalidFamilyKeyError,
   setPendingRotatedKey,
   setFamilyKey,
   setParentToken
@@ -50,6 +52,20 @@ afterEach(() => {
 });
 
 describe("APIクライアント", () => {
+  it("家族キーの確定的な無効応答だけを識別する", () => {
+    expect(
+      isInvalidFamilyKeyError(
+        new ApiError(401, "INVALID_FAMILY_KEY", "家族キーが無効です。")
+      )
+    ).toBe(true);
+    expect(
+      isInvalidFamilyKeyError(
+        new ApiError(429, "RATE_LIMITED", "しばらく待ってください。")
+      )
+    ).toBe(false);
+    expect(isInvalidFamilyKeyError(new TypeError("network failure"))).toBe(false);
+  });
+
   it("QRコードのURL fragmentから家族キーだけを読み取る", () => {
     const familyKey = "A".repeat(43);
 
@@ -169,12 +185,63 @@ describe("APIクライアント", () => {
     expect(retryBody.familyKey).toBe(candidateFamilyKey);
   });
 
-  it("初期設定後の検証拒否でも回復用の家族キーを保持する", async () => {
+  it("結果不明の初期設定では一時的な検証拒否でも家族キーを保持する", async () => {
     const candidateFamilyKey = "C".repeat(43);
     vi.stubGlobal(
       "fetch",
       vi.fn()
         .mockRejectedValueOnce(new TypeError("setup response lost"))
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              error: {
+                code: "RATE_LIMITED",
+                message: "しばらく待ってください。"
+              }
+            }),
+            {
+              status: 429,
+              headers: { "Content-Type": "application/json" }
+            }
+          )
+        )
+    );
+
+    await expect(
+      api.setupRecoverable({
+        bootstrapToken: "bootstrap-token",
+        familyKey: candidateFamilyKey,
+        pin: "1234",
+        goalMinutes: 25,
+        baseAmountYen: 100,
+        bonusAmountYen: 300
+      })
+    ).rejects.toThrow(
+      "初期設定の結果を確認できませんでした。同じ家族キーで再試行します。"
+    );
+    expect(getFamilyKey()).toBe(candidateFamilyKey);
+    expect(getPendingSetupKey()).toBe(candidateFamilyKey);
+  });
+
+  it("設定済み環境と競合した無効キーは破棄する", async () => {
+    const candidateFamilyKey = "D".repeat(43);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              error: {
+                code: "ALREADY_SETUP",
+                message: "初期設定は完了しています。"
+              }
+            }),
+            {
+              status: 409,
+              headers: { "Content-Type": "application/json" }
+            }
+          )
+        )
         .mockResolvedValueOnce(
           new Response(
             JSON.stringify({
@@ -200,11 +267,9 @@ describe("APIクライアント", () => {
         baseAmountYen: 100,
         bonusAmountYen: 300
       })
-    ).rejects.toThrow(
-      "初期設定の結果を確認できませんでした。同じ家族キーで再試行します。"
-    );
-    expect(getFamilyKey()).toBe(candidateFamilyKey);
-    expect(getPendingSetupKey()).toBe(candidateFamilyKey);
+    ).rejects.toThrow("初期設定は完了しています。");
+    expect(getFamilyKey()).toBe("");
+    expect(getPendingSetupKey()).toBe("");
   });
 
   it("精算の通信再試行では同じ冪等性キーを使う", async () => {

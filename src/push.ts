@@ -50,7 +50,10 @@ function applicationServerKey(value: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-function subscriptionInput(subscription: PushSubscription): {
+function subscriptionInput(
+  subscription: PushSubscription,
+  deviceToken: string
+): {
   endpoint: string;
   p256dh: string;
   auth: string;
@@ -66,12 +69,16 @@ function subscriptionInput(subscription: PushSubscription): {
     p256dh: json.keys.p256dh,
     auth: json.keys.auth,
     deviceId: pushDeviceId(),
-    deviceToken: pushDeviceToken()
+    deviceToken
   };
 }
 
+function storedPushDeviceToken(): string {
+  return localStorage.getItem(PUSH_DEVICE_TOKEN_STORAGE) ?? "";
+}
+
 function pushDeviceToken(): string {
-  const stored = localStorage.getItem(PUSH_DEVICE_TOKEN_STORAGE);
+  const stored = storedPushDeviceToken();
   if (stored) {
     return stored;
   }
@@ -144,7 +151,11 @@ export async function syncPushSubscription(
   subscription: PushSubscription,
   familyKey?: string
 ): Promise<void> {
-  const input = subscriptionInput(subscription);
+  const deviceToken = storedPushDeviceToken();
+  if (!deviceToken) {
+    throw new Error("通知端末の再登録が必要です。");
+  }
+  const input = subscriptionInput(subscription, deviceToken);
   if (familyKey) {
     await api.savePushSubscription(input, familyKey);
     return;
@@ -175,12 +186,21 @@ export async function enablePushNotifications(
     throw new Error("Androidの設定で通知を許可してください。");
   }
   const registration = await pushRegistration();
-  const existing = await registration.pushManager.getSubscription();
+  let existing = await registration.pushManager.getSubscription();
+  if (!storedPushDeviceToken()) {
+    if (existing && await existing.unsubscribe() === false) {
+      throw new Error("古い通知登録を解除できませんでした。もう一度お試しください。");
+    }
+    localStorage.removeItem(PUSH_DEVICE_ID_STORAGE);
+    existing = null;
+  }
   const subscription = existing ?? await registration.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: applicationServerKey(publicKey)
   });
-  await syncPushSubscription(subscription);
+  await api.savePushSubscription(
+    subscriptionInput(subscription, pushDeviceToken())
+  );
 }
 
 async function removePushSubscription(
@@ -214,11 +234,14 @@ async function removePushSubscription(
     pending = { ...pending, browserUnsubscribed: true };
     savePendingPushDeletion(pending);
   }
-  try {
-    await api.deletePushSubscription(pending.endpoint, pushDeviceToken());
-  } catch (error) {
-    if (!(ignoreUnauthorized && error instanceof ApiError && error.status === 401)) {
-      throw error;
+  const deviceToken = storedPushDeviceToken();
+  if (deviceToken) {
+    try {
+      await api.deletePushSubscription(pending.endpoint, deviceToken);
+    } catch (error) {
+      if (!(ignoreUnauthorized && error instanceof ApiError && error.status === 401)) {
+        throw error;
+      }
     }
   }
   localStorage.removeItem(PENDING_PUSH_DELETION_STORAGE);

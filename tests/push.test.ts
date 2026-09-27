@@ -94,6 +94,14 @@ beforeEach(() => {
     PushManager: pushManager
   });
   vi.stubGlobal("localStorage", memoryStorage());
+  localStorage.setItem(
+    "study-habit-push-device-id",
+    "11111111-1111-4111-8111-111111111111"
+  );
+  localStorage.setItem(
+    "study-habit-push-device-token",
+    "11111111-1111-4111-8111-111111111111"
+  );
   vi.stubGlobal("atob", (value: string) => Buffer.from(value, "base64").toString("binary"));
   vi.stubGlobal("crypto", {
     randomUUID: () => "11111111-1111-4111-8111-111111111111"
@@ -148,6 +156,40 @@ describe("Push通知", () => {
     expect(registered.pushManager.subscribe).toHaveBeenCalledOnce();
     expect(apiMocks.savePushSubscription).toHaveBeenCalledWith({
       endpoint: subscription.endpoint,
+      p256dh: "client-public-key",
+      auth: "auth-secret",
+      deviceId: "11111111-1111-4111-8111-111111111111",
+      deviceToken: "11111111-1111-4111-8111-111111111111"
+    });
+  });
+
+  it("端末トークンを失った既存購読は解除して新規登録する", async () => {
+    const oldSubscription = pushSubscription();
+    vi.mocked(oldSubscription.unsubscribe).mockResolvedValue(true);
+    const newSubscription = pushSubscription(
+      "https://jmt17.google.com/fcm/send/recovered-subscription"
+    );
+    const registered = registration(newSubscription, {} as ServiceWorker);
+    vi.mocked(registered.pushManager.getSubscription).mockResolvedValue(
+      oldSubscription
+    );
+    localStorage.removeItem("study-habit-push-device-token");
+    localStorage.setItem("study-habit-push-device-id", "old-device-id");
+    vi.stubGlobal("navigator", {
+      serviceWorker: {
+        getRegistration: vi.fn().mockResolvedValue(registered),
+        register: vi.fn(),
+        ready: Promise.resolve(registered)
+      }
+    });
+
+    await enablePushNotifications("AQ");
+
+    expect(oldSubscription.unsubscribe).toHaveBeenCalledOnce();
+    expect(registered.pushManager.subscribe).toHaveBeenCalledOnce();
+    expect(apiMocks.deletePushSubscription).not.toHaveBeenCalled();
+    expect(apiMocks.savePushSubscription).toHaveBeenCalledWith({
+      endpoint: newSubscription.endpoint,
       p256dh: "client-public-key",
       auth: "auth-secret",
       deviceId: "11111111-1111-4111-8111-111111111111",
