@@ -21,6 +21,7 @@ interface SubscriptionRow {
   p256dh: string;
   auth: string;
   device_id: string;
+  updated_at_utc: string;
 }
 
 async function sendNotification(
@@ -200,7 +201,7 @@ export async function processReminder(
     .run();
   const subscriptions = await env.DB
     .prepare(
-      `SELECT endpoint, p256dh, auth, device_id
+      `SELECT endpoint, p256dh, auth, device_id, updated_at_utc
        FROM push_subscriptions
        WHERE device_id IS NOT NULL`
     )
@@ -263,17 +264,41 @@ export async function processReminder(
               .prepare(
                 `UPDATE push_subscriptions
                  SET last_success_at_utc = ?
-                 WHERE endpoint = ?`
+                 WHERE endpoint = ?
+                  AND device_id = ?
+                  AND p256dh = ?
+                  AND auth = ?
+                  AND updated_at_utc = ?`
               )
-              .bind(now.toISOString(), subscription.endpoint)
+              .bind(
+                now.toISOString(),
+                subscription.endpoint,
+                subscription.device_id,
+                subscription.p256dh,
+                subscription.auth,
+                subscription.updated_at_utc
+              )
               .run();
           }
           return;
         }
         if (response.status === 404 || response.status === 410) {
           await env.DB
-            .prepare("DELETE FROM push_subscriptions WHERE endpoint = ?")
-            .bind(subscription.endpoint)
+            .prepare(
+              `DELETE FROM push_subscriptions
+               WHERE endpoint = ?
+                AND device_id = ?
+                AND p256dh = ?
+                AND auth = ?
+                AND updated_at_utc = ?`
+            )
+            .bind(
+              subscription.endpoint,
+              subscription.device_id,
+              subscription.p256dh,
+              subscription.auth,
+              subscription.updated_at_utc
+            )
             .run();
           await markSubscriptionResult(
             env,

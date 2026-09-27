@@ -242,9 +242,6 @@ export function HomeScreen({
         method={recordMethod}
         targetMinutes={recordMethod === "timer" ? timer.targetMinutes ?? undefined : undefined}
         onCancel={() => {
-          if (recordMethod === "timer") {
-            timer.reset();
-          }
           setRecordMethod(null);
         }}
         onRecorded={(nextToday) => {
@@ -266,7 +263,15 @@ export function HomeScreen({
         <div className={timer.active ? "timer active" : "timer"}>
           {timerText(timer.remainingSeconds)}
         </div>
-        {!timer.active ? (
+        {timer.completed ? (
+          <button
+            className="primary-button big"
+            onClick={() => setRecordMethod("timer")}
+            type="button"
+          >
+            完了した学習を記録
+          </button>
+        ) : !timer.active ? (
           <button
             className="primary-button big"
             onClick={() => {

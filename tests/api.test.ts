@@ -169,6 +169,44 @@ describe("APIクライアント", () => {
     expect(retryBody.familyKey).toBe(candidateFamilyKey);
   });
 
+  it("初期設定後の検証拒否でも回復用の家族キーを保持する", async () => {
+    const candidateFamilyKey = "C".repeat(43);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockRejectedValueOnce(new TypeError("setup response lost"))
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              error: {
+                code: "INVALID_FAMILY_KEY",
+                message: "家族キーが正しくありません。"
+              }
+            }),
+            {
+              status: 401,
+              headers: { "Content-Type": "application/json" }
+            }
+          )
+        )
+    );
+
+    await expect(
+      api.setupRecoverable({
+        bootstrapToken: "bootstrap-token",
+        familyKey: candidateFamilyKey,
+        pin: "1234",
+        goalMinutes: 25,
+        baseAmountYen: 100,
+        bonusAmountYen: 300
+      })
+    ).rejects.toThrow(
+      "初期設定の結果を確認できませんでした。同じ家族キーで再試行します。"
+    );
+    expect(getFamilyKey()).toBe(candidateFamilyKey);
+    expect(getPendingSetupKey()).toBe(candidateFamilyKey);
+  });
+
   it("精算の通信再試行では同じ冪等性キーを使う", async () => {
     const fetchMock = vi
       .fn()

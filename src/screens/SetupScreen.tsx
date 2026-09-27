@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   api,
-  ApiError,
-  clearFamilyKey,
   generateFamilyKey,
   getFamilyKey,
   getPendingSetupKey,
@@ -70,18 +68,10 @@ export function SetupScreen({
       await api.validateFamilyKey(generatedKey);
       setSetupConfirmed(true);
       void syncExistingPushSubscription(generatedKey).catch(() => undefined);
-    } catch (error) {
-      if (error instanceof ApiError && error.status < 500) {
-        clearFamilyKey();
-        setGeneratedKey("");
-        setMessage(
-          "初期設定は完了していません。初期設定用トークンとPINを入力して、もう一度お試しください。"
-        );
-      } else {
-        setMessage(
-          "初期設定の結果を確認できませんでした。家族キーを保存し、通信状態を確認して再試行してください。"
-        );
-      }
+    } catch {
+      setMessage(
+        "初期設定の結果を確認できませんでした。家族キーを保存し、通信状態を確認して再試行してください。"
+      );
     } finally {
       setBusy(false);
     }

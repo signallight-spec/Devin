@@ -198,11 +198,7 @@ export const api = {
       try {
         await apiRequest<Today>("/today", {}, { familyKey: input.familyKey });
         return { familyKey: input.familyKey };
-      } catch (validationError) {
-        if (validationError instanceof ApiError && validationError.status < 500) {
-          clearFamilyKey();
-          throw setupError;
-        }
+      } catch {
         throw new Error(
           "初期設定の結果を確認できませんでした。同じ家族キーで再試行します。"
         );

@@ -217,6 +217,49 @@ describe("未達通知Worker", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("古いPush失敗応答で更新済み購読を削除しない", async () => {
+    let resolveFetch!: (value: Response) => void;
+    const fetchResponse = new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    });
+    const fetchMock = vi.fn(() => fetchResponse);
+    vi.stubGlobal("fetch", fetchMock);
+    const now = new Date("2026-09-23T11:05:00.000Z");
+
+    const first = processReminder(env, now);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    database.sqlite.exec(`
+      UPDATE push_subscriptions
+      SET p256dh = 'renewed-key',
+          auth = 'renewed-auth',
+          updated_at_utc = '2026-09-23T11:06:00.000Z'
+      WHERE device_id = 'device-test'
+    `);
+    resolveFetch(new Response(null, { status: 410 }));
+    await expect(first).resolves.toBe(0);
+
+    expect(
+      database.sqlite
+        .prepare(
+          `SELECT p256dh, auth
+           FROM push_subscriptions
+           WHERE device_id = 'device-test'`
+        )
+        .get()
+    ).toEqual({
+      p256dh: "renewed-key",
+      auth: "renewed-auth"
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 201 }))
+    );
+    await expect(
+      processReminder(env, new Date("2026-09-23T11:10:00.000Z"))
+    ).resolves.toBe(1);
+  });
+
   it("結果不明の処理中claimは古くなっても再送しない", async () => {
     database.sqlite.exec(`
       INSERT INTO notification_deliveries
