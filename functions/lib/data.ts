@@ -17,7 +17,7 @@ export async function getCurrentRule(
     .prepare(
       `SELECT * FROM allowance_rules
        WHERE effective_from_utc <= ?
-       ORDER BY effective_from_utc DESC
+       ORDER BY effective_from_utc DESC, id DESC
        LIMIT 1`
     )
     .bind(nowIso)

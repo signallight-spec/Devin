@@ -67,6 +67,8 @@ const MAX_PIN_ATTEMPTS = 5;
 const PIN_LOCK_MINUTES = 5;
 const BONUS_INTERVAL_DAYS = 7;
 const FAMILY_KEY_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+const DEVICE_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PUSH_SERVICE_HOSTS = new Set([
   "fcm.googleapis.com",
   "updates.push.services.mozilla.com",
@@ -284,11 +286,13 @@ function subscriptionValues(body: Record<string, unknown>): {
   endpoint: string;
   p256dh: string;
   auth: string;
+  deviceId: string;
 } {
-  rejectUnknownKeys(body, ["endpoint", "p256dh", "auth"]);
+  rejectUnknownKeys(body, ["endpoint", "p256dh", "auth", "deviceId"]);
   const endpoint = requiredString(body, "endpoint");
   const p256dh = requiredString(body, "p256dh");
   const auth = requiredString(body, "auth");
+  const deviceId = requiredString(body, "deviceId");
   let parsedEndpoint: URL;
   try {
     parsedEndpoint = new URL(endpoint);
@@ -305,11 +309,12 @@ function subscriptionValues(body: Record<string, unknown>): {
       )) ||
     endpoint.length > 2048 ||
     p256dh.length > 512 ||
-    auth.length > 512
+    auth.length > 512 ||
+    !DEVICE_ID_PATTERN.test(deviceId)
   ) {
     throw new HttpError(400, "INVALID_INPUT", "通知先が正しくありません。");
   }
-  return { endpoint, p256dh, auth };
+  return { endpoint, p256dh, auth, deviceId };
 }
 
 async function handlePushSubscriptionPost(
@@ -323,9 +328,17 @@ async function handlePushSubscriptionPost(
   await env.DB
     .prepare(
       `INSERT INTO push_subscriptions
-        (endpoint, p256dh, auth, family_key_generation, created_at_utc, updated_at_utc)
-       VALUES (?, ?, ?, ?, ?, ?)
+        (endpoint, p256dh, auth, device_id, family_key_generation,
+         created_at_utc, updated_at_utc)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(endpoint) DO UPDATE SET
+         p256dh = excluded.p256dh,
+         auth = excluded.auth,
+         device_id = excluded.device_id,
+         family_key_generation = excluded.family_key_generation,
+         updated_at_utc = excluded.updated_at_utc
+       ON CONFLICT(device_id) DO UPDATE SET
+         endpoint = excluded.endpoint,
          p256dh = excluded.p256dh,
          auth = excluded.auth,
          family_key_generation = excluded.family_key_generation,
@@ -335,6 +348,7 @@ async function handlePushSubscriptionPost(
       values.endpoint,
       values.p256dh,
       values.auth,
+      values.deviceId,
       familyKeyGeneration,
       nowIso,
       nowIso
@@ -364,13 +378,17 @@ async function handleCreateAchievement(
   now: Date
 ): Promise<Response> {
   const body = await readJsonObject(request);
-  rejectUnknownKeys(body, ["method", "subject", "note"]);
+  rejectUnknownKeys(body, ["method", "subject", "note", "targetMinutes"]);
   const method = requiredString(body, "method");
   if (method !== "timer" && method !== "self_report") {
     throw new HttpError(400, "INVALID_INPUT", "methodが正しくありません。");
   }
   const subject = optionalTrimmedString(body, "subject", 20);
   const note = optionalTrimmedString(body, "note", 120);
+  const targetMinutes =
+    method === "timer"
+      ? integerInRange(body, "targetMinutes", 1, 180)
+      : settings.goal_minutes;
   const today = localDateInTokyo(now);
   const existing = await env.DB
     .prepare(`${ACHIEVEMENT_WITH_PAID} WHERE a.local_date = ? LIMIT 1`)
@@ -421,7 +439,7 @@ async function handleCreateAchievement(
         method,
         subject,
         note,
-        settings.goal_minutes,
+        targetMinutes,
         streakDays,
         reward.baseAmountYen,
         reward.bonusAmountYen,
@@ -721,7 +739,7 @@ async function handleRulesGet(env: Env): Promise<Response> {
   const rows = await env.DB
     .prepare(
       `SELECT * FROM allowance_rules
-       ORDER BY effective_from_utc DESC`
+       ORDER BY effective_from_utc DESC, id DESC`
     )
     .all<AllowanceRuleRow>();
   return json({ items: rows.results.map(mapRule) });
@@ -747,27 +765,12 @@ async function handleRulesPost(
       `INSERT INTO allowance_rules
         (base_amount_yen, bonus_interval_days, bonus_amount_yen,
          effective_from_utc, created_at_utc)
-       SELECT ?, ?, ?,
-         CASE
-           WHEN latest_effective_from_utc >= ?
-             THEN strftime(
-               '%Y-%m-%dT%H:%M:%fZ',
-               latest_effective_from_utc,
-               '+0.001 seconds'
-             )
-           ELSE ?
-         END,
-         ?
-       FROM (
-         SELECT MAX(effective_from_utc) AS latest_effective_from_utc
-         FROM allowance_rules
-       )`
+       VALUES (?, ?, ?, ?, ?)`
     )
     .bind(
       baseAmountYen,
       BONUS_INTERVAL_DAYS,
       bonusAmountYen,
-      nowIso,
       nowIso,
       nowIso
     )
@@ -902,7 +905,7 @@ async function handleSettle(
 
 function csvCell(value: string | number | null): string {
   const text = value === null ? "" : String(value);
-  const safeText = /^[=+\-@\t\r\n]/.test(text) ? `'${text}` : text;
+  const safeText = text.replace(/(^|[\r\n])([=+\-@\t])/g, "$1'$2");
   return `"${safeText.replace(/"/g, '""')}"`;
 }
 

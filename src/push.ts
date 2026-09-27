@@ -4,6 +4,7 @@ const SERVICE_WORKER_TIMEOUT_MS = 15_000;
 const SERVICE_WORKER_TIMEOUT_MESSAGE =
   "通知の準備が完了しませんでした。ページを再読み込みして、もう一度お試しください。";
 const PENDING_PUSH_DELETION_STORAGE = "study-habit-pending-push-deletion";
+const PUSH_DEVICE_ID_STORAGE = "study-habit-push-device-id";
 
 interface PendingPushDeletion {
   endpoint: string;
@@ -52,6 +53,7 @@ function subscriptionInput(subscription: PushSubscription): {
   endpoint: string;
   p256dh: string;
   auth: string;
+  deviceId: string;
 } {
   const json = subscription.toJSON();
   if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) {
@@ -60,8 +62,19 @@ function subscriptionInput(subscription: PushSubscription): {
   return {
     endpoint: json.endpoint,
     p256dh: json.keys.p256dh,
-    auth: json.keys.auth
+    auth: json.keys.auth,
+    deviceId: pushDeviceId()
   };
+}
+
+function pushDeviceId(): string {
+  const stored = localStorage.getItem(PUSH_DEVICE_ID_STORAGE);
+  if (stored) {
+    return stored;
+  }
+  const created = crypto.randomUUID();
+  localStorage.setItem(PUSH_DEVICE_ID_STORAGE, created);
+  return created;
 }
 
 export function pushSupported(): boolean {
@@ -115,9 +128,24 @@ async function existingPushSubscription(): Promise<PushSubscription | null> {
 }
 
 export async function syncPushSubscription(
-  subscription: PushSubscription
+  subscription: PushSubscription,
+  familyKey?: string
 ): Promise<void> {
-  await api.savePushSubscription(subscriptionInput(subscription));
+  const input = subscriptionInput(subscription);
+  if (familyKey) {
+    await api.savePushSubscription(input, familyKey);
+    return;
+  }
+  await api.savePushSubscription(input);
+}
+
+export async function syncExistingPushSubscription(
+  familyKey: string
+): Promise<void> {
+  const subscription = await existingPushSubscription();
+  if (subscription) {
+    await syncPushSubscription(subscription, familyKey);
+  }
 }
 
 export async function enablePushNotifications(

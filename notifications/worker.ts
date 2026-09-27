@@ -20,6 +20,7 @@ interface SubscriptionRow {
   endpoint: string;
   p256dh: string;
   auth: string;
+  device_id: string;
 }
 
 async function sendNotification(
@@ -59,6 +60,7 @@ async function sendNotification(
 async function claimSubscription(
   env: NotificationEnv,
   localDate: string,
+  deviceId: string,
   endpoint: string,
   now: Date
 ): Promise<string | null> {
@@ -67,10 +69,10 @@ async function claimSubscription(
   const inserted = await env.DB
     .prepare(
       `INSERT OR IGNORE INTO notification_delivery_subscriptions
-        (local_date, endpoint, sent_at_utc, status, claim_token)
-       VALUES (?, ?, ?, 'pending', ?)`
+        (local_date, device_id, endpoint, sent_at_utc, status, claim_token)
+       VALUES (?, ?, ?, ?, 'pending', ?)`
     )
-    .bind(localDate, endpoint, nowIso, claimToken)
+    .bind(localDate, deviceId, endpoint, nowIso, claimToken)
     .run();
   if (inserted.meta.changes) {
     return claimToken;
@@ -78,12 +80,12 @@ async function claimSubscription(
   const reclaimed = await env.DB
     .prepare(
       `UPDATE notification_delivery_subscriptions
-       SET status = 'pending', sent_at_utc = ?, claim_token = ?
+       SET endpoint = ?, status = 'pending', sent_at_utc = ?, claim_token = ?
        WHERE local_date = ?
-        AND endpoint = ?
+        AND device_id = ?
         AND status = 'failed'`
     )
-    .bind(nowIso, claimToken, localDate, endpoint)
+    .bind(endpoint, nowIso, claimToken, localDate, deviceId)
     .run();
   return reclaimed.meta.changes ? claimToken : null;
 }
@@ -91,7 +93,7 @@ async function claimSubscription(
 async function markSubscriptionResult(
   env: NotificationEnv,
   localDate: string,
-  endpoint: string,
+  deviceId: string,
   claimToken: string,
   status: "sent" | "failed",
   now: Date
@@ -101,11 +103,11 @@ async function markSubscriptionResult(
       `UPDATE notification_delivery_subscriptions
        SET status = ?, sent_at_utc = ?
        WHERE local_date = ?
-        AND endpoint = ?
+        AND device_id = ?
         AND status = 'pending'
         AND claim_token = ?`
     )
-    .bind(status, now.toISOString(), localDate, endpoint, claimToken)
+    .bind(status, now.toISOString(), localDate, deviceId, claimToken)
     .run();
   return Boolean(result.meta.changes);
 }
@@ -113,18 +115,18 @@ async function markSubscriptionResult(
 async function releaseSubscriptionClaim(
   env: NotificationEnv,
   localDate: string,
-  endpoint: string,
+  deviceId: string,
   claimToken: string
 ): Promise<void> {
   await env.DB
     .prepare(
       `DELETE FROM notification_delivery_subscriptions
        WHERE local_date = ?
-        AND endpoint = ?
+        AND device_id = ?
         AND status = 'pending'
         AND claim_token = ?`
     )
-    .bind(localDate, endpoint, claimToken)
+    .bind(localDate, deviceId, claimToken)
     .run();
 }
 
@@ -173,7 +175,11 @@ export async function processReminder(
     .bind(timing.localDate, now.toISOString())
     .run();
   const subscriptions = await env.DB
-    .prepare("SELECT endpoint, p256dh, auth FROM push_subscriptions")
+    .prepare(
+      `SELECT endpoint, p256dh, auth, device_id
+       FROM push_subscriptions
+       WHERE device_id IS NOT NULL`
+    )
     .all<SubscriptionRow>();
   if (subscriptions.results.length === 0) {
     return 0;
@@ -185,6 +191,7 @@ export async function processReminder(
       const claimToken = await claimSubscription(
         env,
         timing.localDate,
+        subscription.device_id,
         subscription.endpoint,
         now
       );
@@ -195,7 +202,7 @@ export async function processReminder(
         await releaseSubscriptionClaim(
           env,
           timing.localDate,
-          subscription.endpoint,
+          subscription.device_id,
           claimToken
         );
         return;
@@ -206,7 +213,7 @@ export async function processReminder(
           const marked = await markSubscriptionResult(
             env,
             timing.localDate,
-            subscription.endpoint,
+            subscription.device_id,
             claimToken,
             "sent",
             now
@@ -232,7 +239,7 @@ export async function processReminder(
           await markSubscriptionResult(
             env,
             timing.localDate,
-            subscription.endpoint,
+            subscription.device_id,
             claimToken,
             "failed",
             now
@@ -242,7 +249,7 @@ export async function processReminder(
         await markSubscriptionResult(
           env,
           timing.localDate,
-          subscription.endpoint,
+          subscription.device_id,
           claimToken,
           "failed",
           now

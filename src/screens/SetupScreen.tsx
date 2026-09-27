@@ -9,6 +9,7 @@ import {
   setFamilyKey
 } from "../api";
 import { StatusMessage } from "../components/StatusMessage";
+import { syncExistingPushSubscription } from "../push";
 
 export function SetupScreen({ onReady }: { onReady: () => void }) {
   const [familyKeyInput, setFamilyKeyInput] = useState("");
@@ -31,6 +32,7 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
     setMessage("");
     try {
       await api.validateFamilyKey(value);
+      await syncExistingPushSubscription(value);
       setFamilyKey(value);
       onReady();
     } catch (error) {
@@ -58,6 +60,7 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
     setMessage("");
     try {
       await api.validateFamilyKey(generatedKey);
+      await syncExistingPushSubscription(generatedKey);
       setSetupConfirmed(true);
     } catch (error) {
       if (error instanceof ApiError && error.status < 500) {
@@ -98,6 +101,7 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
       });
       setFamilyKey(result.familyKey);
       setGeneratedKey(result.familyKey);
+      await syncExistingPushSubscription(result.familyKey);
       setSetupConfirmed(true);
     } catch (error) {
       setGeneratedKey(getPendingSetupKey());

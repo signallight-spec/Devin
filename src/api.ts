@@ -199,6 +199,7 @@ export const api = {
     method: "timer" | "self_report";
     subject: string | null;
     note: string | null;
+    targetMinutes?: number;
   }) {
     return apiRequest<{ created: boolean; achievement: Achievement }>(
       "/achievements",
@@ -218,11 +219,16 @@ export const api = {
     endpoint: string;
     p256dh: string;
     auth: string;
-  }) {
-    return apiRequest<void>("/push/subscriptions", {
-      method: "POST",
-      body: JSON.stringify(input)
-    });
+    deviceId: string;
+  }, familyKey?: string) {
+    return apiRequest<void>(
+      "/push/subscriptions",
+      {
+        method: "POST",
+        body: JSON.stringify(input)
+      },
+      familyKey ? { familyKey } : {}
+    );
   },
   deletePushSubscription(endpoint: string) {
     return apiRequest<void>("/push/subscriptions", {

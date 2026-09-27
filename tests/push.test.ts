@@ -20,7 +20,8 @@ vi.mock("../src/api", () => ({
 import {
   disablePushNotifications,
   disconnectPushBeforeFamilyKeyRemoval,
-  enablePushNotifications
+  enablePushNotifications,
+  syncExistingPushSubscription
 } from "../src/push";
 
 function memoryStorage(): Storage {
@@ -94,6 +95,9 @@ beforeEach(() => {
   });
   vi.stubGlobal("localStorage", memoryStorage());
   vi.stubGlobal("atob", (value: string) => Buffer.from(value, "base64").toString("binary"));
+  vi.stubGlobal("crypto", {
+    randomUUID: () => "11111111-1111-4111-8111-111111111111"
+  });
 });
 
 afterEach(() => {
@@ -102,6 +106,31 @@ afterEach(() => {
 });
 
 describe("Push通知", () => {
+  it("既存購読を入力された家族キーへ同期する", async () => {
+    const subscription = pushSubscription();
+    const registered = registration(subscription, {} as ServiceWorker);
+    vi.mocked(registered.pushManager.getSubscription).mockResolvedValue(
+      subscription
+    );
+    vi.stubGlobal("navigator", {
+      serviceWorker: {
+        getRegistration: vi.fn().mockResolvedValue(registered)
+      }
+    });
+
+    await syncExistingPushSubscription("pending-family-key");
+
+    expect(apiMocks.savePushSubscription).toHaveBeenCalledWith(
+      {
+        endpoint: subscription.endpoint,
+        p256dh: "client-public-key",
+        auth: "auth-secret",
+        deviceId: "11111111-1111-4111-8111-111111111111"
+      },
+      "pending-family-key"
+    );
+  });
+
   it("登録がなければService Workerを再登録して購読を保存する", async () => {
     const subscription = pushSubscription();
     const registered = registration(subscription, {} as ServiceWorker);
@@ -119,7 +148,8 @@ describe("Push通知", () => {
     expect(apiMocks.savePushSubscription).toHaveBeenCalledWith({
       endpoint: subscription.endpoint,
       p256dh: "client-public-key",
-      auth: "auth-secret"
+      auth: "auth-secret",
+      deviceId: "11111111-1111-4111-8111-111111111111"
     });
   });
 
@@ -207,7 +237,8 @@ describe("Push通知", () => {
     expect(apiMocks.savePushSubscription).toHaveBeenCalledWith({
       endpoint: newSubscription.endpoint,
       p256dh: "client-public-key",
-      auth: "auth-secret"
+      auth: "auth-secret",
+      deviceId: "11111111-1111-4111-8111-111111111111"
     });
   });
 

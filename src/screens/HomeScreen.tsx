@@ -13,11 +13,13 @@ import type { Today } from "../types";
 function RecordForm({
   method,
   onCancel,
-  onRecorded
+  onRecorded,
+  targetMinutes
 }: {
   method: "timer" | "self_report";
   onCancel: () => void;
   onRecorded: (today: Today) => void;
+  targetMinutes?: number;
 }) {
   const [subject, setSubject] = useState("");
   const [note, setNote] = useState("");
@@ -31,7 +33,8 @@ function RecordForm({
       await api.createAchievement({
         method,
         subject: subject.trim() || null,
-        note: note.trim() || null
+        note: note.trim() || null,
+        ...(method === "timer" ? { targetMinutes } : {})
       });
       onRecorded(await api.today());
     } catch (error) {
@@ -216,6 +219,7 @@ export function HomeScreen({
     return (
       <RecordForm
         method={recordMethod}
+        targetMinutes={recordMethod === "timer" ? timer.targetMinutes ?? undefined : undefined}
         onCancel={() => {
           if (recordMethod === "timer") {
             timer.reset();

@@ -84,6 +84,64 @@ describe("D1スキーマ", () => {
     expect(result.total_amount_yen).toBe(100);
   });
 
+  it("同じ有効時刻の小遣いルールを複数保存できる", () => {
+    database.exec(`
+      INSERT INTO allowance_rules (
+        base_amount_yen, bonus_interval_days, bonus_amount_yen,
+        effective_from_utc, created_at_utc
+      ) VALUES (
+        200, 7, 500,
+        '2026-09-24T00:00:00.000Z', '2026-09-24T00:00:00.000Z'
+      );
+      INSERT INTO allowance_rules (
+        base_amount_yen, bonus_interval_days, bonus_amount_yen,
+        effective_from_utc, created_at_utc
+      ) VALUES (
+        300, 7, 700,
+        '2026-09-24T00:00:00.000Z', '2026-09-24T00:00:00.000Z'
+      );
+    `);
+    const result = database
+      .prepare(`
+        SELECT base_amount_yen
+        FROM allowance_rules
+        ORDER BY effective_from_utc DESC, id DESC
+        LIMIT 1
+      `)
+      .get() as { base_amount_yen: number };
+    expect(result.base_amount_yen).toBe(300);
+  });
+
+  it("通知購読を削除しても端末別の日次配信履歴を保持する", () => {
+    database.exec(`
+      INSERT INTO push_subscriptions (
+        endpoint, p256dh, auth, device_id, created_at_utc, updated_at_utc
+      ) VALUES (
+        'https://fcm.googleapis.com/fcm/send/test',
+        'key', 'auth', 'device-test',
+        '2026-09-23T10:00:00.000Z', '2026-09-23T10:00:00.000Z'
+      );
+      INSERT INTO notification_delivery_subscriptions (
+        local_date, device_id, endpoint, sent_at_utc, status
+      ) VALUES (
+        '2026-09-23', 'device-test',
+        'https://fcm.googleapis.com/fcm/send/test',
+        '2026-09-23T11:00:00.000Z', 'sent'
+      );
+      DELETE FROM push_subscriptions
+      WHERE endpoint = 'https://fcm.googleapis.com/fcm/send/test';
+    `);
+    const result = database
+      .prepare(`
+        SELECT status
+        FROM notification_delivery_subscriptions
+        WHERE local_date = '2026-09-23'
+          AND device_id = 'device-test'
+      `)
+      .get();
+    expect(result).toEqual({ status: "sent" });
+  });
+
   it("支払い対応済みの達成を未払い一覧から除外する", () => {
     insertAchievement("a1", "2026-09-23", 100);
     insertAchievement("a2", "2026-09-24", 400);

@@ -80,9 +80,9 @@ class TestD1 {
         '20:00', '2026-09-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z'
       );
       INSERT INTO push_subscriptions (
-        endpoint, p256dh, auth, created_at_utc, updated_at_utc
+        endpoint, p256dh, auth, device_id, created_at_utc, updated_at_utc
       ) VALUES (
-        'https://fcm.googleapis.com/fcm/send/test', 'key', 'auth',
+        'https://fcm.googleapis.com/fcm/send/test', 'key', 'auth', 'device-test',
         '2026-09-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z'
       );
     `);
@@ -162,9 +162,9 @@ describe("未達通知Worker", () => {
   it("失敗した購読だけを後続Cronで再試行する", async () => {
     database.sqlite.exec(`
       INSERT INTO push_subscriptions (
-        endpoint, p256dh, auth, created_at_utc, updated_at_utc
+        endpoint, p256dh, auth, device_id, created_at_utc, updated_at_utc
       ) VALUES (
-        'https://fcm.googleapis.com/fcm/send/retry', 'key', 'auth',
+        'https://fcm.googleapis.com/fcm/send/retry', 'key', 'auth', 'device-retry',
         '2026-09-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z'
       );
     `);
@@ -223,9 +223,10 @@ describe("未達通知Worker", () => {
         (local_date, claimed_at_utc, sent_count)
       VALUES ('2026-09-23', '2026-09-23T11:00:00.000Z', 0);
       INSERT INTO notification_delivery_subscriptions
-        (local_date, endpoint, sent_at_utc, status)
+        (local_date, device_id, endpoint, sent_at_utc, status)
       VALUES (
         '2026-09-23',
+        'device-test',
         'https://fcm.googleapis.com/fcm/send/test',
         '2026-09-23T11:00:00.000Z',
         'pending'
@@ -259,6 +260,28 @@ describe("未達通知Worker", () => {
       .get() as { status: string; claim_token: string };
     expect(claim.status).toBe("pending");
     expect(claim.claim_token).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("通知後に購読を解除・再登録しても同じ端末へ再送しない", async () => {
+    const now = new Date("2026-09-23T11:05:00.000Z");
+    await expect(processReminder(env, now)).resolves.toBe(1);
+
+    database.sqlite.exec(`
+      DELETE FROM push_subscriptions
+      WHERE endpoint = 'https://fcm.googleapis.com/fcm/send/test';
+      INSERT INTO push_subscriptions (
+        endpoint, p256dh, auth, device_id, created_at_utc, updated_at_utc
+      ) VALUES (
+        'https://fcm.googleapis.com/fcm/send/new-endpoint',
+        'new-key', 'new-auth', 'device-test',
+        '2026-09-23T11:10:00.000Z', '2026-09-23T11:10:00.000Z'
+      );
+    `);
+
+    await expect(
+      processReminder(env, new Date("2026-09-23T11:15:00.000Z"))
+    ).resolves.toBe(0);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("claim後に達成された場合は送信直前に中止する", async () => {

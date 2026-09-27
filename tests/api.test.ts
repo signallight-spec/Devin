@@ -48,6 +48,34 @@ afterEach(() => {
 });
 
 describe("APIクライアント", () => {
+  it("タイマー開始時の目標時間を達成APIへ送る", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          created: true,
+          achievement: { id: "achievement-1" }
+        }),
+        {
+          status: 201,
+          headers: { "Content-Type": "application/json" }
+        }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.createAchievement({
+      method: "timer",
+      subject: null,
+      note: null,
+      targetMinutes: 25
+    });
+
+    const requestBody = JSON.parse(
+      String(fetchMock.mock.calls[0][1]?.body)
+    ) as { targetMinutes: number };
+    expect(requestBody.targetMinutes).toBe(25);
+  });
+
   it("確認前の再発行キーを再読み込み後も保持する", () => {
     const rotatedKey = "B".repeat(43);
     setPendingRotatedKey(rotatedKey);

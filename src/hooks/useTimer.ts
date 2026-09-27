@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { localDateInTokyo } from "../../shared/domain";
 import { createBrowserTimerEffects } from "../timerEffects";
+import {
+  parsePersistedTimer,
+  serializePersistedTimer,
+  type PersistedTimer
+} from "../timerState";
 
 const TIMER_END_STORAGE = "study-habit-timer-ends-at";
 
@@ -7,20 +13,27 @@ export interface StudyTimer {
   active: boolean;
   completed: boolean;
   remainingSeconds: number;
+  targetMinutes: number | null;
   start: () => void;
   reset: () => void;
 }
 
 export function useTimer(goalMinutes: number): StudyTimer {
   const [effects] = useState(createBrowserTimerEffects);
-  const [endsAt, setEndsAt] = useState<number | null>(() => {
-    const stored = Number(localStorage.getItem(TIMER_END_STORAGE));
-    return Number.isFinite(stored) && stored > 0 ? stored : null;
-  });
+  const [timerState, setTimerState] = useState<PersistedTimer | null>(() =>
+    parsePersistedTimer(localStorage.getItem(TIMER_END_STORAGE), new Date())
+  );
   const [now, setNow] = useState(Date.now());
   const completionSoundEndsAt = useRef<number | null>(
-    endsAt !== null && endsAt <= Date.now() ? endsAt : null
+    timerState !== null && timerState.endsAt <= Date.now()
+      ? timerState.endsAt
+      : null
   );
+  const eligibleTimer =
+    timerState?.localDate === localDateInTokyo(new Date(now))
+      ? timerState
+      : null;
+  const endsAt = eligibleTimer?.endsAt ?? null;
 
   useEffect(() => {
     if (!endsAt) {
@@ -47,6 +60,7 @@ export function useTimer(goalMinutes: number): StudyTimer {
   );
   const completed = endsAt !== null && remainingSeconds === 0;
   const active = endsAt !== null && !completed;
+  const targetMinutes = eligibleTimer?.goalMinutes ?? null;
 
   useEffect(() => {
     if (!active) {
@@ -78,18 +92,34 @@ export function useTimer(goalMinutes: number): StudyTimer {
     void effects.stop();
   }, [effects]);
 
+  useEffect(() => {
+    if (timerState && !eligibleTimer) {
+      void effects.stop();
+      localStorage.removeItem(TIMER_END_STORAGE);
+      setTimerState(null);
+    }
+  }, [effects, eligibleTimer, timerState]);
+
   const start = useCallback(() => {
     void effects.unlockAudio();
-    const nextEndsAt = Date.now() + goalMinutes * 60 * 1000;
-    localStorage.setItem(TIMER_END_STORAGE, String(nextEndsAt));
-    setNow(Date.now());
-    setEndsAt(nextEndsAt);
+    const startedAt = new Date();
+    const nextTimerState = {
+      endsAt: startedAt.getTime() + goalMinutes * 60 * 1000,
+      localDate: localDateInTokyo(startedAt),
+      goalMinutes
+    };
+    localStorage.setItem(
+      TIMER_END_STORAGE,
+      serializePersistedTimer(nextTimerState)
+    );
+    setNow(startedAt.getTime());
+    setTimerState(nextTimerState);
   }, [effects, goalMinutes]);
 
   const reset = useCallback(() => {
     void effects.stop();
     localStorage.removeItem(TIMER_END_STORAGE);
-    setEndsAt(null);
+    setTimerState(null);
     setNow(Date.now());
   }, [effects]);
 
@@ -97,6 +127,7 @@ export function useTimer(goalMinutes: number): StudyTimer {
     active,
     completed,
     remainingSeconds,
+    targetMinutes,
     start,
     reset
   };

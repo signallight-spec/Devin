@@ -7,7 +7,7 @@ import {
   handleApi,
   handleConfirmFamilyKey
 } from "../functions/lib/handlers";
-import { getSettings } from "../functions/lib/data";
+import { getCurrentRule, getSettings } from "../functions/lib/data";
 import { errorResponse } from "../functions/lib/http";
 import type { Env } from "../functions/lib/types";
 import { addLocalDays, localDateInTokyo } from "../shared/domain";
@@ -217,7 +217,8 @@ describe("APIハンドラー", () => {
     const input = {
       endpoint: "https://fcm.googleapis.com/fcm/send/subscription-id",
       p256dh: "client-public-key",
-      auth: "auth-secret"
+      auth: "auth-secret",
+      deviceId: "11111111-1111-4111-8111-111111111111"
     };
     const created = await handleApi(
       request(
@@ -276,7 +277,8 @@ describe("APIハンドラー", () => {
     const input = {
       endpoint: "https://jmt17.google.com/fcm/send/subscription-id",
       p256dh: "client-public-key",
-      auth: "auth-secret"
+      auth: "auth-secret",
+      deviceId: "22222222-2222-4222-8222-222222222222"
     };
     const created = await handleApi(
       request(
@@ -359,7 +361,8 @@ describe("APIハンドラー", () => {
           body: JSON.stringify({
             endpoint: "https://fcm.googleapis.com/fcm/send/old-key",
             p256dh: "old-key",
-            auth: "old-auth"
+            auth: "old-auth",
+            deviceId: "33333333-3333-4333-8333-333333333333"
           })
         },
         familyKey
@@ -388,7 +391,8 @@ describe("APIハンドラー", () => {
           body: JSON.stringify({
             endpoint: "https://fcm.googleapis.com/fcm/send/new-key",
             p256dh: "new-key",
-            auth: "new-auth"
+            auth: "new-auth",
+            deviceId: "33333333-3333-4333-8333-333333333333"
           })
         },
         newFamilyKey
@@ -606,7 +610,7 @@ describe("APIハンドラー", () => {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ method: "timer" })
+          body: JSON.stringify({ method: "timer", targetMinutes: 25 })
         },
         familyKey
       ),
@@ -642,6 +646,28 @@ describe("APIハンドラー", () => {
     });
   });
 
+  it("タイマー開始時の目標時間を達成記録へ保存する", async () => {
+    testD1.sqlite.exec("UPDATE app_settings SET goal_minutes = 60 WHERE id = 1");
+    const response = await handleApi(
+      request(
+        "/achievements",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ method: "timer", targetMinutes: 25 })
+        },
+        familyKey
+      ),
+      env
+    );
+    const body = await responseJson<{
+      achievement: { targetMinutes: number };
+    }>(response);
+
+    expect(response.status).toBe(201);
+    expect(body.achievement.targetMinutes).toBe(25);
+  });
+
   it("7日目の達成へボーナスを付ける", async () => {
     const today = localDateInTokyo(new Date());
     const insert = testD1.sqlite.prepare(`
@@ -667,7 +693,7 @@ describe("APIハンドラー", () => {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ method: "timer" })
+          body: JSON.stringify({ method: "timer", targetMinutes: 25 })
         },
         familyKey
       ),
@@ -729,7 +755,7 @@ describe("APIハンドラー", () => {
     expect(rejected.status).toBe(400);
   });
 
-  it("同じミリ秒の小遣いルール保存を順番に記録する", async () => {
+  it("同じミリ秒の小遣いルールは保存時刻を変えず後の設定を適用する", async () => {
     const token = await parentToken();
     const initialRule = testD1.sqlite
       .prepare(
@@ -763,22 +789,28 @@ describe("APIハンドラー", () => {
 
     const rules = testD1.sqlite
       .prepare(
-        `SELECT base_amount_yen, effective_from_utc
+        `SELECT id, base_amount_yen, effective_from_utc
          FROM allowance_rules
          WHERE base_amount_yen IN (150, 200)
-         ORDER BY effective_from_utc`
+         ORDER BY id`
       )
-      .all();
+      .all() as Array<{
+        id: number;
+        base_amount_yen: number;
+        effective_from_utc: string;
+      }>;
     expect(rules).toEqual([
-      {
+      expect.objectContaining({
         base_amount_yen: 150,
-        effective_from_utc: new Date(now.getTime() + 1).toISOString()
-      },
-      {
+        effective_from_utc: now.toISOString()
+      }),
+      expect.objectContaining({
         base_amount_yen: 200,
-        effective_from_utc: new Date(now.getTime() + 2).toISOString()
-      }
+        effective_from_utc: now.toISOString()
+      })
     ]);
+    const currentRule = await getCurrentRule(env.DB, now.toISOString());
+    expect(currentRule?.base_amount_yen).toBe(200);
   });
 
   it("支払いを冪等に一括精算する", async () => {
@@ -788,7 +820,7 @@ describe("APIハンドラー", () => {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ method: "timer" })
+          body: JSON.stringify({ method: "timer", targetMinutes: 25 })
         },
         familyKey
       ),
@@ -884,7 +916,7 @@ describe("APIハンドラー", () => {
           body: JSON.stringify({
             method: "self_report",
             subject: "=SUM(A1:A2)",
-            note: "@IMPORTXML(\"https://example.test\")"
+            note: "一行目\n@IMPORTXML(\"https://example.test\")"
           })
         },
         familyKey
@@ -900,7 +932,9 @@ describe("APIハンドラー", () => {
 
     expect(response.status).toBe(200);
     expect(csv).toContain("\"'=SUM(A1:A2)\"");
-    expect(csv).toContain("\"'@IMPORTXML(\"\"https://example.test\"\")\"");
+    expect(csv).toContain(
+      "\"一行目\n'@IMPORTXML(\"\"https://example.test\"\")\""
+    );
   });
 
   it("金額0円の達成も支払い済みにできる", async () => {
@@ -915,7 +949,7 @@ describe("APIハンドラー", () => {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ method: "timer" })
+          body: JSON.stringify({ method: "timer", targetMinutes: 25 })
         },
         familyKey
       ),
