@@ -10,6 +10,7 @@ import {
 import {
   createParentSession,
   familyKeyMatches,
+  fromBase64Url,
   generateFamilyKey,
   hashPin,
   requireValidParentSession,
@@ -75,6 +76,7 @@ const PUSH_SERVICE_HOSTS = new Set([
   "web.push.apple.com"
 ]);
 const CHROME_PUSH_SERVICE_HOST_PATTERN = /^jmt\d+\.google\.com$/;
+const BASE64_URL_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 function randomCharacterSeed(): number {
   const values = new Uint32Array(1);
@@ -304,25 +306,7 @@ async function handleToday(
   });
 }
 
-function subscriptionValues(body: Record<string, unknown>): {
-  endpoint: string;
-  p256dh: string;
-  auth: string;
-  deviceId: string;
-  deviceToken: string;
-} {
-  rejectUnknownKeys(body, [
-    "endpoint",
-    "p256dh",
-    "auth",
-    "deviceId",
-    "deviceToken"
-  ]);
-  const endpoint = requiredString(body, "endpoint");
-  const p256dh = requiredString(body, "p256dh");
-  const auth = requiredString(body, "auth");
-  const deviceId = requiredString(body, "deviceId");
-  const deviceToken = requiredString(body, "deviceToken");
+function canonicalPushEndpoint(endpoint: string): string {
   let parsedEndpoint: URL;
   try {
     parsedEndpoint = new URL(endpoint);
@@ -340,16 +324,73 @@ function subscriptionValues(body: Record<string, unknown>): {
         CHROME_PUSH_SERVICE_HOST_PATTERN.test(parsedEndpoint.hostname) &&
         parsedEndpoint.pathname.startsWith("/fcm/send/")
       )) ||
-    endpoint.length > 2048 ||
+    endpoint.length > 2048
+  ) {
+    throw new HttpError(400, "INVALID_INPUT", "通知先が正しくありません。");
+  }
+  return parsedEndpoint.href;
+}
+
+async function validPushKeys(p256dh: string, auth: string): Promise<boolean> {
+  if (
+    !BASE64_URL_PATTERN.test(p256dh) ||
+    !BASE64_URL_PATTERN.test(auth)
+  ) {
+    return false;
+  }
+  try {
+    const publicKey = fromBase64Url(p256dh);
+    const authSecret = fromBase64Url(auth);
+    if (
+      publicKey.length !== 65 ||
+      publicKey[0] !== 4 ||
+      authSecret.length !== 16
+    ) {
+      return false;
+    }
+    await crypto.subtle.importKey(
+      "raw",
+      publicKey,
+      { name: "ECDH", namedCurve: "P-256" },
+      false,
+      []
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function subscriptionValues(body: Record<string, unknown>): Promise<{
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  deviceId: string;
+  deviceToken: string;
+}> {
+  rejectUnknownKeys(body, [
+    "endpoint",
+    "p256dh",
+    "auth",
+    "deviceId",
+    "deviceToken"
+  ]);
+  const endpoint = requiredString(body, "endpoint");
+  const p256dh = requiredString(body, "p256dh");
+  const auth = requiredString(body, "auth");
+  const deviceId = requiredString(body, "deviceId");
+  const deviceToken = requiredString(body, "deviceToken");
+  if (
     p256dh.length > 512 ||
     auth.length > 512 ||
+    !(await validPushKeys(p256dh, auth)) ||
     !DEVICE_ID_PATTERN.test(deviceId) ||
     !DEVICE_ID_PATTERN.test(deviceToken)
   ) {
     throw new HttpError(400, "INVALID_INPUT", "通知先が正しくありません。");
   }
   return {
-    endpoint: parsedEndpoint.href,
+    endpoint: canonicalPushEndpoint(endpoint),
     p256dh,
     auth,
     deviceId,
@@ -363,7 +404,7 @@ async function handlePushSubscriptionPost(
   now: Date,
   familyKeyGeneration: FamilyKeyGeneration
 ): Promise<Response> {
-  const values = subscriptionValues(await readJsonObject(request));
+  const values = await subscriptionValues(await readJsonObject(request));
   const deviceTokenHash = await sha256Hex(values.deviceToken);
   const nowIso = now.toISOString();
   const saved = await env.DB
@@ -378,7 +419,11 @@ async function handlePushSubscriptionPost(
          auth = excluded.auth,
          device_id = excluded.device_id,
          device_token_hash = excluded.device_token_hash,
-         family_key_generation = excluded.family_key_generation,
+         family_key_generation = CASE
+           WHEN push_subscriptions.family_key_generation = 'pending'
+             THEN 'pending'
+           ELSE excluded.family_key_generation
+         END,
          updated_at_utc = excluded.updated_at_utc
        WHERE push_subscriptions.device_token_hash IS NULL
           OR push_subscriptions.device_token_hash = excluded.device_token_hash
@@ -387,7 +432,11 @@ async function handlePushSubscriptionPost(
          p256dh = excluded.p256dh,
          auth = excluded.auth,
          device_token_hash = excluded.device_token_hash,
-         family_key_generation = excluded.family_key_generation,
+         family_key_generation = CASE
+           WHEN push_subscriptions.family_key_generation = 'pending'
+             THEN 'pending'
+           ELSE excluded.family_key_generation
+         END,
          updated_at_utc = excluded.updated_at_utc
        WHERE push_subscriptions.device_token_hash = excluded.device_token_hash`
     )
@@ -417,11 +466,20 @@ async function handlePushSubscriptionDelete(
   env: Env
 ): Promise<Response> {
   const body = await readJsonObject(request);
-  rejectUnknownKeys(body, ["endpoint"]);
-  const endpoint = requiredString(body, "endpoint");
+  rejectUnknownKeys(body, ["endpoint", "deviceToken"]);
+  const endpoint = canonicalPushEndpoint(requiredString(body, "endpoint"));
+  const deviceToken = requiredString(body, "deviceToken");
+  if (!DEVICE_ID_PATTERN.test(deviceToken)) {
+    throw new HttpError(400, "INVALID_INPUT", "通知先が正しくありません。");
+  }
+  const deviceTokenHash = await sha256Hex(deviceToken);
   await env.DB
-    .prepare("DELETE FROM push_subscriptions WHERE endpoint = ?")
-    .bind(endpoint)
+    .prepare(
+      `DELETE FROM push_subscriptions
+       WHERE endpoint = ?
+        AND device_token_hash = ?`
+    )
+    .bind(endpoint, deviceTokenHash)
     .run();
   return empty();
 }

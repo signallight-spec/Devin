@@ -378,6 +378,24 @@ describe("未達通知Worker", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("処理中に東京日付を跨いだ場合は送信しない", async () => {
+    const startedAt = new Date("2026-09-23T14:59:59.000Z");
+    const crossedMidnight = new Date("2026-09-23T15:00:01.000Z");
+
+    await expect(
+      processReminder(env, startedAt, () => crossedMidnight)
+    ).resolves.toBe(0);
+
+    expect(fetch).not.toHaveBeenCalled();
+    const claimCount = database.sqlite
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM notification_delivery_subscriptions`
+      )
+      .get() as { count: number };
+    expect(claimCount.count).toBe(0);
+  });
+
   it("当日の達成があれば通知しない", async () => {
     database.sqlite.exec(`
       INSERT INTO allowance_rules (

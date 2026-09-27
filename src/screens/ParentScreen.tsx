@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  ApiError,
   api,
   clearPendingRotatedKey,
   clearParentToken,
@@ -21,9 +22,15 @@ import type {
   Settlement
 } from "../types";
 
-function ParentLogin({ onLogin }: { onLogin: () => void }) {
+function ParentLogin({
+  initialMessage,
+  onLogin
+}: {
+  initialMessage: string;
+  onLogin: () => void;
+}) {
   const [pin, setPin] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(initialMessage);
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
@@ -126,6 +133,7 @@ export function ParentScreen() {
         ("status" in error && (error as { status: unknown }).status === 403)
       ) {
         clearParentToken();
+        setMessage("親ページの有効期限が切れました。PINをもう一度入力してください。");
         setAuthenticated(false);
       } else {
         setTone(options.refreshFailureMessage ? "info" : "error");
@@ -177,6 +185,27 @@ export function ParentScreen() {
         `${successMessage} ただし表示の同期に失敗したため、画面を再読み込みしてください。`
     });
     setBusy(false);
+  };
+
+  const exportCsv = async () => {
+    setBusy(true);
+    setMessage("");
+    try {
+      await api.exportCsv();
+      setTone("success");
+      setMessage("CSVを保存しました。");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        clearParentToken();
+        setMessage("親ページの有効期限が切れました。PINをもう一度入力してください。");
+        setAuthenticated(false);
+        return;
+      }
+      setTone("error");
+      setMessage(error instanceof Error ? error.message : "CSV出力に失敗しました。");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const saveRule = async () => {
@@ -311,7 +340,12 @@ export function ParentScreen() {
   };
 
   if (!authenticated) {
-    return <ParentLogin onLogin={() => setAuthenticated(true)} />;
+    return (
+      <ParentLogin
+        initialMessage={message}
+        onLogin={() => setAuthenticated(true)}
+      />
+    );
   }
 
   return (
@@ -339,7 +373,12 @@ export function ParentScreen() {
             <p className="eyebrow">最近の記録</p>
             <h2>学習履歴</h2>
           </div>
-          <button className="text-button" onClick={() => void api.exportCsv()} type="button">
+          <button
+            className="text-button"
+            disabled={busy}
+            onClick={() => void exportCsv()}
+            type="button"
+          >
             CSV保存
           </button>
         </div>

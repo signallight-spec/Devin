@@ -12,6 +12,10 @@ import { errorResponse } from "../functions/lib/http";
 import type { Env } from "../functions/lib/types";
 import { addLocalDays, localDateInTokyo } from "../shared/domain";
 
+const VALID_PUSH_PUBLIC_KEY =
+  "BN61JE9DZj-_5DlakXIAWcw5HcdoxRrTz2Gc-9ZCLayd6QCiR0G2KqgiTkYD85gSe503T1ueCEXG3O2GHrbZmIs";
+const VALID_PUSH_AUTH = "AQEBAQEBAQEBAQEBAQEBAQ";
+
 const migrationsDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../migrations"
@@ -216,8 +220,8 @@ describe("APIハンドラー", () => {
   it("AndroidのPush購読を登録・解除する", async () => {
     const input = {
       endpoint: "https://fcm.googleapis.com/fcm/send/subscription-id",
-      p256dh: "client-public-key",
-      auth: "auth-secret",
+      p256dh: VALID_PUSH_PUBLIC_KEY,
+      auth: VALID_PUSH_AUTH,
       deviceId: "11111111-1111-4111-8111-111111111111",
       deviceToken: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
     };
@@ -245,7 +249,10 @@ describe("APIハンドラー", () => {
         {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ endpoint: input.endpoint })
+          body: JSON.stringify({
+            endpoint: input.endpoint,
+            deviceToken: input.deviceToken
+          })
         },
         familyKey
       ),
@@ -274,11 +281,55 @@ describe("APIハンドラー", () => {
     expect(rejected.status).toBe(400);
   });
 
+  it("別の端末tokenではPush購読を解除できない", async () => {
+    const input = {
+      endpoint: "https://fcm.googleapis.com/fcm/send/protected-device",
+      p256dh: VALID_PUSH_PUBLIC_KEY,
+      auth: VALID_PUSH_AUTH,
+      deviceId: "66666666-6666-4666-8666-666666666666",
+      deviceToken: "11111111-2222-4333-8444-555555555555"
+    };
+    await handleApi(
+      request(
+        "/push/subscriptions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input)
+        },
+        familyKey
+      ),
+      env
+    );
+
+    const removed = await handleApi(
+      request(
+        "/push/subscriptions",
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            endpoint: input.endpoint,
+            deviceToken: "99999999-9999-4999-8999-999999999999"
+          })
+        },
+        familyKey
+      ),
+      env
+    );
+    const count = testD1.sqlite
+      .prepare("SELECT COUNT(*) AS count FROM push_subscriptions")
+      .get() as { count: number };
+
+    expect(removed.status).toBe(204);
+    expect(count.count).toBe(1);
+  });
+
   it("Chromeのjmt Push購読はFCMパスだけ登録する", async () => {
     const input = {
       endpoint: "https://jmt17.google.com/fcm/send/subscription-id",
-      p256dh: "client-public-key",
-      auth: "auth-secret",
+      p256dh: VALID_PUSH_PUBLIC_KEY,
+      auth: VALID_PUSH_AUTH,
       deviceId: "22222222-2222-4222-8222-222222222222",
       deviceToken: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
     };
@@ -314,6 +365,29 @@ describe("APIハンドラー", () => {
       );
       expect(rejected.status).toBe(400);
     }
+
+    for (const invalidKeys of [
+      { p256dh: "not-a-public-key", auth: VALID_PUSH_AUTH },
+      {
+        p256dh:
+          "BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        auth: VALID_PUSH_AUTH
+      },
+      { p256dh: VALID_PUSH_PUBLIC_KEY, auth: "not-an-auth-secret" }
+    ]) {
+      const rejected = await handleRequest(
+        request(
+          "/push/subscriptions",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...input, ...invalidKeys })
+          },
+          familyKey
+        )
+      );
+      expect(rejected.status).toBe(400);
+    }
   });
 
   it("別の端末tokenでは既存deviceIdの通知先を置き換えない", async () => {
@@ -328,8 +402,8 @@ describe("APIハンドラー", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             endpoint: originalEndpoint,
-            p256dh: "original-key",
-            auth: "original-auth",
+            p256dh: VALID_PUSH_PUBLIC_KEY,
+            auth: VALID_PUSH_AUTH,
             deviceId,
             deviceToken: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
           })
@@ -348,8 +422,8 @@ describe("APIハンドラー", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             endpoint: "https://fcm.googleapis.com/fcm/send/other-device",
-            p256dh: "other-key",
-            auth: "other-auth",
+            p256dh: VALID_PUSH_PUBLIC_KEY,
+            auth: VALID_PUSH_AUTH,
             deviceId,
             deviceToken: "ffffffff-ffff-4fff-8fff-ffffffffffff"
           })
@@ -368,8 +442,8 @@ describe("APIハンドラー", () => {
   it("Push通知先を正規化し認証情報やフラグメントを拒否する", async () => {
     const input = {
       endpoint: "https://FCM.GOOGLEAPIS.COM/fcm/send/subscription-id",
-      p256dh: "client-public-key",
-      auth: "auth-secret",
+      p256dh: VALID_PUSH_PUBLIC_KEY,
+      auth: VALID_PUSH_AUTH,
       deviceId: "44444444-4444-4444-8444-444444444444",
       deviceToken: "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
     };
@@ -466,8 +540,8 @@ describe("APIハンドラー", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             endpoint: "https://fcm.googleapis.com/fcm/send/old-key",
-            p256dh: "old-key",
-            auth: "old-auth",
+            p256dh: VALID_PUSH_PUBLIC_KEY,
+            auth: VALID_PUSH_AUTH,
             deviceId: "33333333-3333-4333-8333-333333333333",
             deviceToken: "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
           })
@@ -497,13 +571,31 @@ describe("APIハンドラー", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             endpoint: "https://fcm.googleapis.com/fcm/send/new-key",
-            p256dh: "new-key",
-            auth: "new-auth",
+            p256dh: VALID_PUSH_PUBLIC_KEY,
+            auth: VALID_PUSH_AUTH,
             deviceId: "33333333-3333-4333-8333-333333333333",
             deviceToken: "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
           })
         },
         newFamilyKey
+      ),
+      env
+    );
+    await handleApi(
+      request(
+        "/push/subscriptions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            endpoint: "https://fcm.googleapis.com/fcm/send/new-key",
+            p256dh: VALID_PUSH_PUBLIC_KEY,
+            auth: VALID_PUSH_AUTH,
+            deviceId: "33333333-3333-4333-8333-333333333333",
+            deviceToken: "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+          })
+        },
+        familyKey
       ),
       env
     );

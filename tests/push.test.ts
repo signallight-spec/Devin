@@ -200,7 +200,13 @@ describe("Push通知", () => {
     await expect(disablePushNotifications()).resolves.toBeUndefined();
     expect(subscription.unsubscribe).toHaveBeenCalledOnce();
     expect(apiMocks.deletePushSubscription).toHaveBeenCalledTimes(2);
-    expect(localStorage.length).toBe(0);
+    expect(apiMocks.deletePushSubscription).toHaveBeenLastCalledWith(
+      subscription.endpoint,
+      "11111111-1111-4111-8111-111111111111"
+    );
+    expect(
+      localStorage.getItem("study-habit-pending-push-deletion")
+    ).toBeNull();
   });
 
   it("未完了のサーバー解除を終えるまで新しい購読を作らない", async () => {
@@ -268,7 +274,13 @@ describe("Push通知", () => {
     expect(subscription.unsubscribe).toHaveBeenCalledOnce();
     await expect(disconnectPushBeforeFamilyKeyRemoval()).resolves.toBeUndefined();
     expect(apiMocks.deletePushSubscription).toHaveBeenCalledTimes(2);
+    expect(apiMocks.deletePushSubscription).toHaveBeenLastCalledWith(
+      subscription.endpoint,
+      "11111111-1111-4111-8111-111111111111"
+    );
     expect(subscription.unsubscribe).toHaveBeenCalledOnce();
-    expect(localStorage.length).toBe(0);
+    expect(
+      localStorage.getItem("study-habit-pending-push-deletion")
+    ).toBeNull();
   });
 });

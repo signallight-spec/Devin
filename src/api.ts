@@ -251,10 +251,10 @@ export const api = {
       familyKey ? { familyKey } : {}
     );
   },
-  deletePushSubscription(endpoint: string) {
+  deletePushSubscription(endpoint: string, deviceToken: string) {
     return apiRequest<void>("/push/subscriptions", {
       method: "DELETE",
-      body: JSON.stringify({ endpoint })
+      body: JSON.stringify({ endpoint, deviceToken })
     });
   },
   async startParentSession(pin: string) {

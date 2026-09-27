@@ -166,7 +166,8 @@ async function notificationStillDue(
 
 export async function processReminder(
   env: NotificationEnv,
-  now = new Date()
+  now = new Date(),
+  currentTime: () => Date = () => now
 ): Promise<number> {
   const settings = await env.DB
     .prepare(
@@ -230,7 +231,13 @@ export async function processReminder(
         );
         return;
       }
-      if (!(await notificationStillDue(env, timing.localDate, now))) {
+      if (
+        !(await notificationStillDue(
+          env,
+          timing.localDate,
+          currentTime()
+        ))
+      ) {
         await releaseSubscriptionClaim(
           env,
           timing.localDate,
@@ -315,6 +322,6 @@ export default {
     context: ExecutionContext
   ): Promise<void> {
     void controller;
-    context.waitUntil(processReminder(env, new Date()));
+    context.waitUntil(processReminder(env, new Date(), () => new Date()));
   }
 };

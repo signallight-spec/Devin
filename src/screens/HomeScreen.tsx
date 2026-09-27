@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  localDateInTokyo,
-  millisecondsUntilNextTokyoDay
+  localDateInTokyo
 } from "../../shared/domain";
 import { api } from "../api";
 import { CharacterCard } from "../components/Character";
 import { StatusMessage } from "../components/StatusMessage";
 import { timerText, yen } from "../format";
+import { nextHomeRefreshDelay } from "../homeRefresh";
 import type { StudyTimer } from "../hooks/useTimer";
 import type { Today } from "../types";
+
+const DATE_REFRESH_RETRY_MS = 30_000;
 
 function RecordForm({
   method,
@@ -100,10 +102,12 @@ export function HomeScreen({
       const nextToday = await api.today();
       setToday(nextToday);
       onGoalMinutesLoaded(nextToday.goalMinutes);
+      return true;
     } catch (error) {
       if (error instanceof Error) {
         setMessage(error.message);
       }
+      return false;
     } finally {
       setLoading(false);
     }
@@ -119,21 +123,36 @@ export function HomeScreen({
       return;
     }
     let timeoutId: number;
+    let cancelled = false;
     const refreshIfDateChanged = () => {
       window.clearTimeout(timeoutId);
       if (localDateInTokyo(new Date()) !== todayLocalDate) {
         setRecordMethod(null);
-        void load();
+        void load().then((loaded) => {
+          const delay = nextHomeRefreshDelay(
+            new Date(),
+            todayLocalDate,
+            loaded
+          );
+          if (!cancelled && delay !== null) {
+            timeoutId = window.setTimeout(
+              refreshIfDateChanged,
+              delay
+            );
+          }
+        });
         return;
       }
       timeoutId = window.setTimeout(
         refreshIfDateChanged,
-        millisecondsUntilNextTokyoDay(new Date()) + 100
+        nextHomeRefreshDelay(new Date(), todayLocalDate, false) ??
+          DATE_REFRESH_RETRY_MS
       );
     };
     timeoutId = window.setTimeout(
       refreshIfDateChanged,
-      millisecondsUntilNextTokyoDay(new Date()) + 100
+      nextHomeRefreshDelay(new Date(), todayLocalDate, false) ??
+        DATE_REFRESH_RETRY_MS
     );
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
@@ -142,6 +161,7 @@ export function HomeScreen({
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
+      cancelled = true;
       window.clearTimeout(timeoutId);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };

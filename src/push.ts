@@ -215,7 +215,7 @@ async function removePushSubscription(
     savePendingPushDeletion(pending);
   }
   try {
-    await api.deletePushSubscription(pending.endpoint);
+    await api.deletePushSubscription(pending.endpoint, pushDeviceToken());
   } catch (error) {
     if (!(ignoreUnauthorized && error instanceof ApiError && error.status === 401)) {
       throw error;
