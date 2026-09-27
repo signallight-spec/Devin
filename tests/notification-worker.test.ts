@@ -24,14 +24,16 @@ class TestStatement {
   constructor(
     private readonly database: DatabaseSync,
     private readonly query: string,
-    private readonly values: SqlValue[] = []
+    private readonly values: SqlValue[] = [],
+    private readonly afterRun?: (query: string) => void
   ) {}
 
   bind(...values: SqlValue[]): D1PreparedStatement {
     return new TestStatement(
       this.database,
       this.query,
-      values
+      values,
+      this.afterRun
     ) as unknown as D1PreparedStatement;
   }
 
@@ -48,6 +50,7 @@ class TestStatement {
 
   async run<T>(): Promise<D1Result<T>> {
     const result = this.database.prepare(this.query).run(...this.values);
+    this.afterRun?.(this.query);
     return {
       results: [],
       success: true,
@@ -58,6 +61,7 @@ class TestStatement {
 
 class TestD1 {
   readonly sqlite = new DatabaseSync(":memory:");
+  afterRun?: (query: string) => void;
 
   constructor() {
     for (const file of readdirSync(migrationsDirectory).sort()) {
@@ -85,7 +89,12 @@ class TestD1 {
   }
 
   prepare(query: string): D1PreparedStatement {
-    return new TestStatement(this.sqlite, query) as unknown as D1PreparedStatement;
+    return new TestStatement(
+      this.sqlite,
+      query,
+      [],
+      (executedQuery) => this.afterRun?.(executedQuery)
+    ) as unknown as D1PreparedStatement;
   }
 
   async batch<T = unknown>(
@@ -208,7 +217,7 @@ describe("未達通知Worker", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("処理中claimが古くなったら再試行できる", async () => {
+  it("結果不明の処理中claimは古くなっても再送しない", async () => {
     database.sqlite.exec(`
       INSERT INTO notification_deliveries
         (local_date, claimed_at_utc, sent_count)
@@ -225,8 +234,78 @@ describe("未達通知Worker", () => {
 
     await expect(
       processReminder(env, new Date("2026-09-23T11:20:00.000Z"))
-    ).resolves.toBe(1);
-    expect(fetch).toHaveBeenCalledTimes(1);
+    ).resolves.toBe(0);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("通信結果が不明な場合は同日の再送をしない", async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new Error("network");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const now = new Date("2026-09-23T11:05:00.000Z");
+
+    await expect(processReminder(env, now)).resolves.toBe(0);
+    await expect(
+      processReminder(env, new Date("2026-09-23T11:25:00.000Z"))
+    ).resolves.toBe(0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const claim = database.sqlite
+      .prepare(
+        `SELECT status, claim_token
+         FROM notification_delivery_subscriptions`
+      )
+      .get() as { status: string; claim_token: string };
+    expect(claim.status).toBe("pending");
+    expect(claim.claim_token).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("claim後に達成された場合は送信直前に中止する", async () => {
+    let achievementInserted = false;
+    database.afterRun = (query) => {
+      if (
+        achievementInserted ||
+        !query.includes(
+          "INSERT OR IGNORE INTO notification_delivery_subscriptions"
+        )
+      ) {
+        return;
+      }
+      achievementInserted = true;
+      database.afterRun = undefined;
+      database.sqlite.exec(`
+        INSERT INTO allowance_rules (
+          base_amount_yen, bonus_interval_days, bonus_amount_yen,
+          effective_from_utc, created_at_utc
+        ) VALUES (
+          100, 7, 300,
+          '2026-09-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z'
+        );
+        INSERT INTO achievements (
+          id, local_date, method, target_minutes, streak_days,
+          base_amount_yen, bonus_amount_yen, total_amount_yen,
+          allowance_rule_id, achieved_at_utc
+        ) VALUES (
+          'just-finished', '2026-09-23', 'timer', 25, 1,
+          100, 0, 100, 1, '2026-09-23T11:05:00.000Z'
+        );
+      `);
+    };
+
+    await expect(
+      processReminder(env, new Date("2026-09-23T11:05:00.000Z"))
+    ).resolves.toBe(0);
+
+    expect(achievementInserted).toBe(true);
+    expect(fetch).not.toHaveBeenCalled();
+    const claimCount = database.sqlite
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM notification_delivery_subscriptions`
+      )
+      .get() as { count: number };
+    expect(claimCount.count).toBe(0);
   });
 
   it("当日の達成があれば通知しない", async () => {

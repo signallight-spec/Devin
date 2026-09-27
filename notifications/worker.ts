@@ -22,8 +22,6 @@ interface SubscriptionRow {
   auth: string;
 }
 
-const CLAIM_STALE_MINUTES = 15;
-
 async function sendNotification(
   subscription: SubscriptionRow,
   env: NotificationEnv
@@ -63,56 +61,82 @@ async function claimSubscription(
   localDate: string,
   endpoint: string,
   now: Date
-): Promise<boolean> {
+): Promise<string | null> {
   const nowIso = now.toISOString();
-  const staleBeforeIso = new Date(
-    now.getTime() - CLAIM_STALE_MINUTES * 60 * 1000
-  ).toISOString();
+  const claimToken = crypto.randomUUID();
   const inserted = await env.DB
     .prepare(
       `INSERT OR IGNORE INTO notification_delivery_subscriptions
-        (local_date, endpoint, sent_at_utc, status)
-       VALUES (?, ?, ?, 'pending')`
+        (local_date, endpoint, sent_at_utc, status, claim_token)
+       VALUES (?, ?, ?, 'pending', ?)`
     )
-    .bind(localDate, endpoint, nowIso)
+    .bind(localDate, endpoint, nowIso, claimToken)
     .run();
   if (inserted.meta.changes) {
-    return true;
+    return claimToken;
   }
   const reclaimed = await env.DB
     .prepare(
       `UPDATE notification_delivery_subscriptions
-       SET status = 'pending', sent_at_utc = ?
+       SET status = 'pending', sent_at_utc = ?, claim_token = ?
        WHERE local_date = ?
         AND endpoint = ?
-        AND status != 'sent'
-        AND (
-          status = 'failed'
-          OR sent_at_utc <= ?
-        )`
+        AND status = 'failed'`
     )
-    .bind(nowIso, localDate, endpoint, staleBeforeIso)
+    .bind(nowIso, claimToken, localDate, endpoint)
     .run();
-  return Boolean(reclaimed.meta.changes);
+  return reclaimed.meta.changes ? claimToken : null;
 }
 
 async function markSubscriptionResult(
   env: NotificationEnv,
   localDate: string,
   endpoint: string,
+  claimToken: string,
   status: "sent" | "failed",
   now: Date
-): Promise<void> {
-  await env.DB
+): Promise<boolean> {
+  const result = await env.DB
     .prepare(
       `UPDATE notification_delivery_subscriptions
        SET status = ?, sent_at_utc = ?
        WHERE local_date = ?
         AND endpoint = ?
-        AND status = 'pending'`
+        AND status = 'pending'
+        AND claim_token = ?`
     )
-    .bind(status, now.toISOString(), localDate, endpoint)
+    .bind(status, now.toISOString(), localDate, endpoint, claimToken)
     .run();
+  return Boolean(result.meta.changes);
+}
+
+async function releaseSubscriptionClaim(
+  env: NotificationEnv,
+  localDate: string,
+  endpoint: string,
+  claimToken: string
+): Promise<void> {
+  await env.DB
+    .prepare(
+      `DELETE FROM notification_delivery_subscriptions
+       WHERE local_date = ?
+        AND endpoint = ?
+        AND status = 'pending'
+        AND claim_token = ?`
+    )
+    .bind(localDate, endpoint, claimToken)
+    .run();
+}
+
+async function achievementExists(
+  env: NotificationEnv,
+  localDate: string
+): Promise<boolean> {
+  const achievement = await env.DB
+    .prepare("SELECT id FROM achievements WHERE local_date = ?")
+    .bind(localDate)
+    .first<{ id: string }>();
+  return Boolean(achievement);
 }
 
 export async function processReminder(
@@ -137,11 +161,7 @@ export async function processReminder(
   if (!timing.due) {
     return 0;
   }
-  const achievement = await env.DB
-    .prepare("SELECT id FROM achievements WHERE local_date = ?")
-    .bind(timing.localDate)
-    .first<{ id: number }>();
-  if (achievement) {
+  if (await achievementExists(env, timing.localDate)) {
     return 0;
   }
   await env.DB
@@ -162,37 +182,46 @@ export async function processReminder(
   let sentCount = 0;
   await Promise.all(
     subscriptions.results.map(async (subscription) => {
-      const claimed = await claimSubscription(
+      const claimToken = await claimSubscription(
         env,
         timing.localDate,
         subscription.endpoint,
         now
       );
-      if (!claimed) {
+      if (!claimToken) {
+        return;
+      }
+      if (await achievementExists(env, timing.localDate)) {
+        await releaseSubscriptionClaim(
+          env,
+          timing.localDate,
+          subscription.endpoint,
+          claimToken
+        );
         return;
       }
       try {
         const response = await sendNotification(subscription, env);
         if (response.ok) {
-          sentCount += 1;
-          await env.DB.batch([
-            env.DB
-              .prepare(
-                `UPDATE notification_delivery_subscriptions
-                 SET status = 'sent', sent_at_utc = ?
-                 WHERE local_date = ?
-                  AND endpoint = ?
-                  AND status = 'pending'`
-              )
-              .bind(now.toISOString(), timing.localDate, subscription.endpoint),
-            env.DB
+          const marked = await markSubscriptionResult(
+            env,
+            timing.localDate,
+            subscription.endpoint,
+            claimToken,
+            "sent",
+            now
+          );
+          if (marked) {
+            sentCount += 1;
+            await env.DB
               .prepare(
                 `UPDATE push_subscriptions
                  SET last_success_at_utc = ?
                  WHERE endpoint = ?`
               )
               .bind(now.toISOString(), subscription.endpoint)
-          ]);
+              .run();
+          }
           return;
         }
         if (response.status === 404 || response.status === 410) {
@@ -200,23 +229,26 @@ export async function processReminder(
             .prepare("DELETE FROM push_subscriptions WHERE endpoint = ?")
             .bind(subscription.endpoint)
             .run();
+          await markSubscriptionResult(
+            env,
+            timing.localDate,
+            subscription.endpoint,
+            claimToken,
+            "failed",
+            now
+          );
           return;
         }
         await markSubscriptionResult(
           env,
           timing.localDate,
           subscription.endpoint,
+          claimToken,
           "failed",
           now
         );
       } catch {
-        await markSubscriptionResult(
-          env,
-          timing.localDate,
-          subscription.endpoint,
-          "failed",
-          now
-        );
+        // 配信結果が不明な通信例外は再送せず、1日1回を優先してpendingを残す。
         return;
       }
     })
