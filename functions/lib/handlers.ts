@@ -995,6 +995,16 @@ async function handleRulesPost(
     0,
     100_000
   );
+  if (
+    body["overGoalBonusEnabled"] !== undefined &&
+    typeof body["overGoalBonusEnabled"] !== "boolean"
+  ) {
+    throw new HttpError(
+      400,
+      "INVALID_INPUT",
+      "overGoalBonusEnabledが正しくありません。"
+    );
+  }
   const overGoalBonusEnabled = body["overGoalBonusEnabled"] === true;
   const overGoalMinutes = integerInRange(
     body,
@@ -1182,9 +1192,11 @@ async function handleExport(env: Env): Promise<Response> {
          a.method,
          a.subject,
          a.note,
+         a.target_minutes,
          a.streak_days,
          a.base_amount_yen,
          a.bonus_amount_yen,
+         a.over_goal_amount_yen,
          a.total_amount_yen,
          p.paid_at_utc
        FROM achievements a
@@ -1197,9 +1209,11 @@ async function handleExport(env: Env): Promise<Response> {
       method: string;
       subject: string | null;
       note: string | null;
+      target_minutes: number;
       streak_days: number;
       base_amount_yen: number;
       bonus_amount_yen: number;
+      over_goal_amount_yen: number;
       total_amount_yen: number;
       paid_at_utc: string | null;
     }>();
@@ -1208,9 +1222,11 @@ async function handleExport(env: Env): Promise<Response> {
     "記録方法",
     "科目",
     "メモ",
+    "分数",
     "連続日数",
     "基本額",
     "ボーナス",
+    "がんばりボーナス",
     "合計額",
     "支払日時"
   ];
@@ -1222,9 +1238,11 @@ async function handleExport(env: Env): Promise<Response> {
         row.method === "timer" ? "タイマー" : "自己申告",
         row.subject,
         row.note,
+        row.target_minutes,
         row.streak_days,
         row.base_amount_yen,
         row.bonus_amount_yen,
+        row.over_goal_amount_yen,
         row.total_amount_yen,
         row.paid_at_utc
       ]

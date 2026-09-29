@@ -1199,6 +1199,26 @@ describe("APIハンドラー", () => {
       overGoalAmountYen: 60
     });
 
+    const invalidToggle = await handleRequest(
+      request(
+        "/parent/allowance-rules",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            baseAmountYen: 100,
+            bonusAmountYen: 300,
+            overGoalBonusEnabled: "true",
+            overGoalMinutes: 45,
+            overGoalAmountYen: 60
+          })
+        },
+        familyKey,
+        token
+      )
+    );
+    expect(invalidToggle.status).toBe(400);
+
     const invalidMinutes = await handleRequest(
       request(
         "/parent/allowance-rules",
@@ -1483,6 +1503,22 @@ describe("APIハンドラー", () => {
     expect(csv).toContain(
       "\"一行目\n  '@IMPORTXML(\"\"https://example.test\"\")\""
     );
+  });
+
+  it("CSV出力に分数と超過ボーナスを含める", async () => {
+    enableOverGoalBonus();
+    await postAchievement({ method: "self_report", targetMinutes: 45 });
+    const token = await parentToken();
+    const response = await handleApi(
+      request("/parent/export.csv", {}, familyKey, token),
+      env
+    );
+    const csv = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(csv).toContain("分数");
+    expect(csv).toContain("がんばりボーナス");
+    expect(csv).toContain('"45","1","100","0","50","150"');
   });
 
   it("金額0円の達成も支払い済みにできる", async () => {
