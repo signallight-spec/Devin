@@ -5,6 +5,9 @@ export interface AllowanceRule {
   baseAmountYen: number;
   bonusIntervalDays: number;
   bonusAmountYen: number;
+  overGoalBonusEnabled: boolean;
+  overGoalMinutes: number;
+  overGoalAmountYen: number;
   effectiveFrom: string;
 }
 
@@ -38,6 +41,7 @@ export interface Achievement {
   streakDays: number;
   baseAmountYen: number;
   bonusAmountYen: number;
+  overGoalAmountYen: number;
   totalAmountYen: number;
   achievedAt: string;
   paid: boolean;

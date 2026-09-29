@@ -101,7 +101,10 @@ export function ParentScreen() {
   const [busy, setBusy] = useState(false);
   const [ruleForm, setRuleForm] = useState({
     baseAmountYen: 100,
-    bonusAmountYen: 300
+    bonusAmountYen: 300,
+    overGoalBonusEnabled: false,
+    overGoalMinutes: 60,
+    overGoalAmountYen: 0
   });
   const [newPin, setNewPin] = useState("");
   const [rotatedKey, setRotatedKey] = useState("");
@@ -176,7 +179,12 @@ export function ParentScreen() {
       ) {
         setRuleForm({
           baseAmountYen: nextDashboard.currentAllowanceRule.baseAmountYen,
-          bonusAmountYen: nextDashboard.currentAllowanceRule.bonusAmountYen
+          bonusAmountYen: nextDashboard.currentAllowanceRule.bonusAmountYen,
+          overGoalBonusEnabled:
+            nextDashboard.currentAllowanceRule.overGoalBonusEnabled,
+          overGoalMinutes: nextDashboard.currentAllowanceRule.overGoalMinutes,
+          overGoalAmountYen:
+            nextDashboard.currentAllowanceRule.overGoalAmountYen
         });
       }
       if (
@@ -579,11 +587,14 @@ export function ParentScreen() {
             <div className="history-row" key={achievement.id}>
               <div>
                 <strong>{shortDate(achievement.localDate)}</strong>
-                <span>{achievement.subject || (achievement.method === "timer" ? "タイマー" : "自己申告")}</span>
+                <span>{achievement.subject || (achievement.method === "timer" ? "タイマー" : "自己申告")}・{achievement.targetMinutes}分</span>
               </div>
               <div>
                 <strong>{yen(achievement.totalAmountYen)}</strong>
                 <span>{achievement.paid ? "支払い済み" : "未払い"}</span>
+                {achievement.overGoalAmountYen > 0 && (
+                  <span>うちがんばりボーナス {yen(achievement.overGoalAmountYen)}</span>
+                )}
               </div>
             </div>
           ))}
@@ -628,6 +639,59 @@ export function ParentScreen() {
               value={ruleForm.bonusAmountYen}
             />
           </label>
+          <label>
+            がんばりボーナス
+            <input
+              checked={ruleForm.overGoalBonusEnabled}
+              onChange={(event) => {
+                ruleFormDirty.current = true;
+                ruleFormRevision.current += 1;
+                setRuleForm((value) => ({
+                  ...value,
+                  overGoalBonusEnabled: event.target.checked
+                }));
+              }}
+              type="checkbox"
+            />
+            目標を上回った日に追加で支払う
+          </label>
+          <label>
+            ボーナス目標分数
+            <input
+              disabled={!ruleForm.overGoalBonusEnabled}
+              max={180}
+              min={5}
+              onChange={(event) => {
+                ruleFormDirty.current = true;
+                ruleFormRevision.current += 1;
+                setRuleForm((value) => ({
+                  ...value,
+                  overGoalMinutes: Number(event.target.value)
+                }));
+              }}
+              step={5}
+              type="number"
+              value={ruleForm.overGoalMinutes}
+            />
+          </label>
+          <label>
+            ボーナス額（円）
+            <input
+              disabled={!ruleForm.overGoalBonusEnabled}
+              min={0}
+              onChange={(event) => {
+                ruleFormDirty.current = true;
+                ruleFormRevision.current += 1;
+                setRuleForm((value) => ({
+                  ...value,
+                  overGoalAmountYen: Number(event.target.value)
+                }));
+              }}
+              step={10}
+              type="number"
+              value={ruleForm.overGoalAmountYen}
+            />
+          </label>
         </div>
         <button className="secondary-button" disabled={busy} onClick={saveRule} type="button">
           新しいルールを保存
@@ -638,6 +702,9 @@ export function ParentScreen() {
             <p key={rule.id}>
               {dateTime(rule.effectiveFrom)}：{yen(rule.baseAmountYen)} ＋
               {rule.bonusIntervalDays}日ごとに {yen(rule.bonusAmountYen)}
+              {rule.overGoalBonusEnabled
+                ? ` ＋ ${rule.overGoalMinutes}分以上で ${yen(rule.overGoalAmountYen)}`
+                : ""}
             </p>
           ))}
         </details>

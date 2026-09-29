@@ -303,6 +303,9 @@ export const api = {
   createRule(input: {
     baseAmountYen: number;
     bonusAmountYen: number;
+    overGoalBonusEnabled: boolean;
+    overGoalMinutes: number;
+    overGoalAmountYen: number;
   }) {
     return apiRequest<AllowanceRule>(
       "/parent/allowance-rules",
