@@ -204,6 +204,14 @@ textarea {
   opacity: 0.24;
 }
 
+.character-sprite.mood-hungry {
+  filter: saturate(0.7);
+}
+
+.character-sprite.mood-famished {
+  filter: saturate(0.35) brightness(0.92);
+}
+
 .character-sprite.decoration-aura {
   filter: drop-shadow(0 0 15px rgb(255 186 104 / 85%));
 }
@@ -239,7 +247,7 @@ textarea {
   margin-bottom: 0.35rem;
 }
 
-.character-copy > p:not(.eyebrow, .decoration-copy) {
+.character-copy > p:not(.eyebrow, .decoration-copy, .mood-copy) {
   margin-bottom: 0.8rem;
   color: var(--muted);
   font-size: 0.88rem;
@@ -278,6 +286,20 @@ textarea {
 
 .decoration-copy {
   margin: 0.55rem 0 0;
+}
+
+.mood-copy {
+  margin: 0.55rem 0 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.mood-copy.mood-hungry {
+  color: #a3702a;
+}
+
+.mood-copy.mood-famished {
+  color: #8d5a5a;
 }
 
 .collection-card {

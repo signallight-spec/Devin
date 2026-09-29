@@ -13,6 +13,7 @@ export const CHARACTER_SPECIES = [
 export type CharacterSpecies = (typeof CHARACTER_SPECIES)[number];
 export type CharacterStage = "egg" | "cracked" | "hatchling" | "juvenile" | "adult";
 export type StreakDecoration = "none" | "stars" | "crown" | "aura";
+export type CharacterMood = "full" | "hungry" | "famished";
 
 export interface CharacterState {
   species: CharacterSpecies;
@@ -22,6 +23,7 @@ export interface CharacterState {
   cycleGoalDays: number;
   nextStageAt: number | null;
   streakDecoration: StreakDecoration;
+  mood: CharacterMood;
   collection: Array<{
     species: CharacterSpecies;
     grownCount: number;
@@ -128,6 +130,22 @@ export function displayedStreak(
   return 0;
 }
 
+export function characterMood(
+  latestLocalDate: string | null,
+  today: string
+): CharacterMood {
+  if (latestLocalDate === today) {
+    return "full";
+  }
+  if (
+    latestLocalDate === null ||
+    latestLocalDate === addLocalDays(today, -1)
+  ) {
+    return "hungry";
+  }
+  return "famished";
+}
+
 export function calculateReward(
   streakDays: number,
   baseAmountYen: number,
@@ -165,7 +183,9 @@ export function characterSpeciesForCycle(
 export function calculateCharacterState(
   totalAchievementDays: number,
   currentStreakDays: number,
-  seed: number
+  seed: number,
+  latestLocalDate: string | null,
+  today: string
 ): CharacterState {
   const completedCycles = Math.floor(totalAchievementDays / 30);
   const completedToday =
@@ -216,6 +236,7 @@ export function calculateCharacterState(
     cycleGoalDays: 30,
     nextStageAt,
     streakDecoration,
+    mood: characterMood(latestLocalDate, today),
     collection: CHARACTER_SPECIES.map((species) => ({
       species,
       grownCount: counts.get(species) ?? 0

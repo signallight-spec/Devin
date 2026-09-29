@@ -11,6 +11,7 @@ export interface AllowanceRule {
 export type CharacterSpecies = "dragon" | "fox" | "owl" | "rabbit" | "bear";
 export type CharacterStage = "egg" | "cracked" | "hatchling" | "juvenile" | "adult";
 export type StreakDecoration = "none" | "stars" | "crown" | "aura";
+export type CharacterMood = "full" | "hungry" | "famished";
 
 export interface CharacterState {
   species: CharacterSpecies;
@@ -20,6 +21,7 @@ export interface CharacterState {
   cycleGoalDays: number;
   nextStageAt: number | null;
   streakDecoration: StreakDecoration;
+  mood: CharacterMood;
   collection: Array<{
     species: CharacterSpecies;
     grownCount: number;
