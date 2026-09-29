@@ -8,7 +8,7 @@ import { StatusMessage } from "../components/StatusMessage";
 import { timerText, yen } from "../format";
 import { nextHomeRefreshDelay } from "../homeRefresh";
 import type { StudyTimer } from "../hooks/useTimer";
-import type { Achievement, Today } from "../types";
+import type { Achievement, CharacterState, Today } from "../types";
 
 const DATE_REFRESH_RETRY_MS = 30_000;
 const RECORDED_REFRESH_FAILURE_MESSAGE =
@@ -22,7 +22,10 @@ function RecordForm({
 }: {
   method: "timer" | "self_report";
   onCancel: () => void;
-  onRecorded: (achievement: Achievement) => void;
+  onRecorded: (result: {
+    achievement: Achievement;
+    character: CharacterState;
+  }) => void;
   targetMinutes?: number;
 }) {
   const [subject, setSubject] = useState("");
@@ -40,7 +43,7 @@ function RecordForm({
         note: note.trim() || null,
         ...(method === "timer" ? { targetMinutes } : {})
       });
-      onRecorded(result.achievement);
+      onRecorded(result);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "記録に失敗しました。");
     } finally {
@@ -262,12 +265,13 @@ export function HomeScreen({
         onCancel={() => {
           setRecordMethod(null);
         }}
-        onRecorded={(achievement) => {
+        onRecorded={(result) => {
           timer.reset();
           setToday((value) => value ? {
             ...value,
-            achievement,
-            currentStreakDays: achievement.streakDays
+            achievement: result.achievement,
+            character: result.character,
+            currentStreakDays: result.achievement.streakDays
           } : value);
           setRecordMethod(null);
           void load(RECORDED_REFRESH_FAILURE_MESSAGE);

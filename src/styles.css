@@ -216,6 +216,14 @@ textarea {
   filter: drop-shadow(0 0 15px rgb(255 186 104 / 85%));
 }
 
+.character-sprite.decoration-aura.mood-hungry {
+  filter: drop-shadow(0 0 15px rgb(255 186 104 / 85%)) saturate(0.7);
+}
+
+.character-sprite.decoration-aura.mood-famished {
+  filter: drop-shadow(0 0 15px rgb(255 186 104 / 85%)) saturate(0.35) brightness(0.92);
+}
+
 .character-decoration {
   position: absolute;
   z-index: 1;

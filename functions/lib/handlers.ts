@@ -155,6 +155,30 @@ async function requireFamilyKey(
   throw new HttpError(401, "INVALID_FAMILY_KEY", "家族キーが無効です。");
 }
 
+async function currentCharacter(
+  db: D1Database,
+  settings: AppSettingsRow,
+  today: string
+): Promise<ReturnType<typeof calculateCharacterState>> {
+  const [latest, total] = await Promise.all([
+    latestAchievement(db),
+    db
+      .prepare("SELECT COUNT(*) AS count FROM achievements")
+      .first<{ count: number }>()
+  ]);
+  return calculateCharacterState(
+    total?.count ?? 0,
+    displayedStreak(
+      latest?.local_date ?? null,
+      latest?.streak_days ?? null,
+      today
+    ),
+    settings.character_seed,
+    latest?.local_date ?? null,
+    today
+  );
+}
+
 async function latestAchievement(
   db: D1Database
 ): Promise<LatestStreakRow | null> {
@@ -527,7 +551,11 @@ async function handleCreateAchievement(
     .bind(today)
     .first<AchievementRow>();
   if (existing) {
-    return json({ created: false, achievement: mapAchievement(existing) });
+    return json({
+      created: false,
+      achievement: mapAchievement(existing),
+      character: await currentCharacter(env.DB, settings, today)
+    });
   }
 
   const nowIso = now.toISOString();
@@ -586,7 +614,11 @@ async function handleCreateAchievement(
       .bind(today)
       .first<AchievementRow>();
     if (concurrent) {
-      return json({ created: false, achievement: mapAchievement(concurrent) });
+      return json({
+        created: false,
+        achievement: mapAchievement(concurrent),
+        character: await currentCharacter(env.DB, settings, today)
+      });
     }
     throw new HttpError(500, "CREATE_FAILED", "達成記録を保存できませんでした。");
   }
@@ -597,7 +629,14 @@ async function handleCreateAchievement(
   if (!created) {
     throw new HttpError(500, "CREATE_FAILED", "達成記録を読み込めませんでした。");
   }
-  return json({ created: true, achievement: mapAchievement(created) }, 201);
+  return json(
+    {
+      created: true,
+      achievement: mapAchievement(created),
+      character: await currentCharacter(env.DB, settings, today)
+    },
+    201
+  );
 }
 
 async function handleCalendar(url: URL, env: Env, now: Date): Promise<Response> {
