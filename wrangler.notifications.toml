@@ -1,6 +1,7 @@
 name = "study-habit-notifications"
 main = "notifications/worker.ts"
 compatibility_date = "2026-03-01"
+workers_dev = false
 
 [triggers]
 crons = ["*/5 * * * *"]
