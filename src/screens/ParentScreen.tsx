@@ -115,6 +115,12 @@ export function ParentScreen() {
     useState<StudySubject>(STUDY_SUBJECTS[0]);
   const latestLoadId = useRef(0);
   const suggestionRevision = useRef(0);
+  const ruleFormDirty = useRef(false);
+  const ruleFormRevision = useRef(0);
+  const notificationFormDirty = useRef(false);
+  const notificationFormRevision = useRef(0);
+  const suggestionFormDirty = useRef(false);
+  const suggestionFormRevision = useRef(0);
 
   const expireParentSession = useCallback((error: unknown): boolean => {
     if (!(error instanceof ApiError) || error.status !== 403) {
@@ -136,6 +142,10 @@ export function ParentScreen() {
     const loadId = latestLoadId.current + 1;
     latestLoadId.current = loadId;
     const suggestionRevisionAtStart = suggestionRevision.current;
+    const ruleFormRevisionAtStart = ruleFormRevision.current;
+    const notificationFormRevisionAtStart =
+      notificationFormRevision.current;
+    const suggestionFormRevisionAtStart = suggestionFormRevision.current;
     if (!options.preserveMessage) {
       setMessage("");
     }
@@ -160,12 +170,25 @@ export function ParentScreen() {
       setAchievements(achievementResult.items);
       setRules(ruleResult.items);
       setPayments(paymentResult.items);
-      setRuleForm({
-        baseAmountYen: nextDashboard.currentAllowanceRule.baseAmountYen,
-        bonusAmountYen: nextDashboard.currentAllowanceRule.bonusAmountYen
-      });
-      setNotificationForm(nextDashboard.notificationSettings);
-      if (suggestionRevisionAtStart === suggestionRevision.current) {
+      if (
+        !ruleFormDirty.current &&
+        ruleFormRevisionAtStart === ruleFormRevision.current
+      ) {
+        setRuleForm({
+          baseAmountYen: nextDashboard.currentAllowanceRule.baseAmountYen,
+          bonusAmountYen: nextDashboard.currentAllowanceRule.bonusAmountYen
+        });
+      }
+      if (
+        !notificationFormDirty.current &&
+        notificationFormRevisionAtStart === notificationFormRevision.current
+      ) {
+        setNotificationForm(nextDashboard.notificationSettings);
+      }
+      if (
+        !suggestionFormDirty.current &&
+        suggestionFormRevisionAtStart === suggestionFormRevision.current
+      ) {
         setSuggestionSubject(
           nextDashboard.nextSuggestion.subject ?? STUDY_SUBJECTS[0]
         );
@@ -192,9 +215,23 @@ export function ParentScreen() {
     }
   }, [authenticated, load]);
 
+  useEffect(() => {
+    if (authenticated) {
+      return;
+    }
+    latestLoadId.current += 1;
+    ruleFormDirty.current = false;
+    ruleFormRevision.current += 1;
+    notificationFormDirty.current = false;
+    notificationFormRevision.current += 1;
+    suggestionFormDirty.current = false;
+    suggestionFormRevision.current += 1;
+    setDashboard(null);
+  }, [authenticated]);
+
   const displayedTargetDate = dashboard?.nextSuggestion.targetDate;
   useEffect(() => {
-    if (!displayedTargetDate) {
+    if (!authenticated || !displayedTargetDate) {
       return;
     }
     const displayedLocalDate = addLocalDays(displayedTargetDate, -1);
@@ -237,7 +274,7 @@ export function ParentScreen() {
       window.clearTimeout(timeoutId);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [displayedTargetDate, load]);
+  }, [authenticated, displayedTargetDate, load]);
 
   const settle = async () => {
     setBusy(true);
@@ -310,6 +347,8 @@ export function ParentScreen() {
     }
     const successMessage =
       "新しい小遣いルールを保存しました。過去分は変わりません。";
+    ruleFormDirty.current = false;
+    ruleFormRevision.current += 1;
     setDashboard((value) => value ? {
       ...value,
       currentAllowanceRule: rule
@@ -336,6 +375,8 @@ export function ParentScreen() {
         ...value,
         notificationSettings: settings
       } : value);
+      notificationFormDirty.current = false;
+      notificationFormRevision.current += 1;
       setNotificationForm(settings);
       setTone("success");
       setMessage(
@@ -360,6 +401,8 @@ export function ParentScreen() {
       const nextSuggestion =
         await api.updateNextSuggestion(suggestionSubject);
       suggestionRevision.current += 1;
+      suggestionFormDirty.current = false;
+      suggestionFormRevision.current += 1;
       setDashboard((value) => value ? {
         ...value,
         nextSuggestion
@@ -555,12 +598,14 @@ export function ParentScreen() {
             1日の基本額
             <input
               min={0}
-              onChange={(event) =>
+              onChange={(event) => {
+                ruleFormDirty.current = true;
+                ruleFormRevision.current += 1;
                 setRuleForm((value) => ({
                   ...value,
                   baseAmountYen: Number(event.target.value)
-                }))
-              }
+                }));
+              }}
               step={10}
               type="number"
               value={ruleForm.baseAmountYen}
@@ -570,12 +615,14 @@ export function ParentScreen() {
             7日ごとのボーナス額
             <input
               min={0}
-              onChange={(event) =>
+              onChange={(event) => {
+                ruleFormDirty.current = true;
+                ruleFormRevision.current += 1;
                 setRuleForm((value) => ({
                   ...value,
                   bonusAmountYen: Number(event.target.value)
-                }))
-              }
+                }));
+              }}
               step={10}
               type="number"
               value={ruleForm.bonusAmountYen}
@@ -634,6 +681,8 @@ export function ParentScreen() {
             disabled={busy || !dashboard}
             onChange={(event) => {
               if (isStudySubject(event.target.value)) {
+                suggestionFormDirty.current = true;
+                suggestionFormRevision.current += 1;
                 setSuggestionSubject(event.target.value);
               }
             }}
@@ -666,12 +715,14 @@ export function ParentScreen() {
         <label className="toggle-row">
           <input
             checked={notificationForm.enabled}
-            onChange={(event) =>
+            onChange={(event) => {
+              notificationFormDirty.current = true;
+              notificationFormRevision.current += 1;
               setNotificationForm((value) => ({
                 ...value,
                 enabled: event.target.checked
-              }))
-            }
+              }));
+            }}
             type="checkbox"
           />
           通知をONにする
@@ -680,12 +731,14 @@ export function ParentScreen() {
           通知時刻（5分刻み）
           <input
             disabled={!notificationForm.enabled}
-            onChange={(event) =>
+            onChange={(event) => {
+              notificationFormDirty.current = true;
+              notificationFormRevision.current += 1;
               setNotificationForm((value) => ({
                 ...value,
                 time: event.target.value
-              }))
-            }
+              }));
+            }}
             step={300}
             type="time"
             value={notificationForm.time}
