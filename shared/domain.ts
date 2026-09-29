@@ -1,4 +1,7 @@
 export type AchievementMethod = "timer" | "self_report";
+export const STUDY_SUBJECTS = ["国語", "数学", "英語", "理科", "社会"] as const;
+
+export type StudySubject = (typeof STUDY_SUBJECTS)[number];
 export const CHARACTER_SPECIES = [
   "dragon",
   "fox",
@@ -23,6 +26,22 @@ export interface CharacterState {
     species: CharacterSpecies;
     grownCount: number;
   }>;
+}
+
+export function isStudySubject(value: unknown): value is StudySubject {
+  return (
+    typeof value === "string" &&
+    STUDY_SUBJECTS.some((subject) => subject === value)
+  );
+}
+
+export function studySuggestionForDate(localDate: string): StudySubject {
+  let hash = 2_166_136_261;
+  for (const character of localDate) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16_777_619) >>> 0;
+  }
+  return STUDY_SUBJECTS[hash % STUDY_SUBJECTS.length];
 }
 
 export function addLocalDays(localDate: string, amount: number): string {

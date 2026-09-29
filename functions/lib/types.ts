@@ -1,3 +1,5 @@
+import type { StudySubject } from "../../shared/domain";
+
 export interface Env {
   DB: D1Database;
   BOOTSTRAP_TOKEN: string;
@@ -19,6 +21,8 @@ export interface AppSettingsRow {
   character_seed: number;
   notifications_enabled: number;
   notification_time: string;
+  next_suggestion: StudySubject | null;
+  next_suggestion_date: string | null;
   created_at_utc: string;
   updated_at_utc: string;
 }

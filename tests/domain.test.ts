@@ -8,6 +8,8 @@ import {
   localDateInTokyo,
   millisecondsUntilNextTokyoDay,
   mondayWeekRange,
+  STUDY_SUBJECTS,
+  studySuggestionForDate,
   timerCanFinishToday
 } from "../shared/domain";
 import { shortDate } from "../src/format";
@@ -72,6 +74,15 @@ describe("学習記録の計算", () => {
       start: "2026-09-21",
       end: "2026-09-27"
     });
+  });
+
+  it("同じ東京日付から同じおすすめ科目を選ぶ", () => {
+    expect(studySuggestionForDate("2026-09-23")).toBe("英語");
+    expect(studySuggestionForDate("2026-09-24")).toBe("国語");
+    expect(studySuggestionForDate("2026-09-25")).toBe("社会");
+    expect(
+      STUDY_SUBJECTS.includes(studySuggestionForDate("2030-01-01"))
+    ).toBe(true);
   });
 
   it("累計達成日数から卵・孵化・成獣の段階を計算する", () => {

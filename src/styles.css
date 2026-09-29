@@ -356,6 +356,18 @@ textarea {
   font-size: clamp(1.75rem, 7vw, 2.8rem);
 }
 
+.suggestion-card {
+  border-color: rgb(198 136 34 / 32%);
+  background:
+    radial-gradient(circle at top right, rgb(255 210 92 / 30%), transparent 42%),
+    var(--paper);
+}
+
+.suggestion-card h2,
+.suggestion-card p:last-child {
+  margin-bottom: 0;
+}
+
 .eyebrow {
   margin-bottom: 0.4rem;
   color: var(--green);
@@ -668,6 +680,15 @@ textarea {
 .notification-parent-card {
   display: grid;
   gap: 1rem;
+}
+
+.suggestion-parent-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.suggestion-parent-card select {
+  width: 100%;
 }
 
 .notification-parent-card > p:not(.eyebrow) {

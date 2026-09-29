@@ -279,6 +279,15 @@ export function HomeScreen({
   return (
     <div className="stack">
       <CharacterCard character={today.character} />
+      <section className="card suggestion-card">
+        <p className="eyebrow">
+          {today.suggestion.parentSelected
+            ? "おうちの人から・今日のおすすめ"
+            : "今日のおすすめ"}
+        </p>
+        <h2>今日は{today.suggestion.subject}の学習をやってみよう</h2>
+        <p>おすすめはヒントです。ほかの科目を選んでも大丈夫です。</p>
+      </section>
       <section className="hero-card">
         <div className="streak-chip">連続 {today.currentStreakDays} 日</div>
         <p className="eyebrow">今日の目標</p>

@@ -7,6 +7,7 @@ import type {
   Settlement,
   Today
 } from "./types";
+import type { StudySubject } from "../shared/domain";
 
 const FAMILY_KEY_STORAGE = "study-habit-family-key";
 const PENDING_SETUP_KEY_STORAGE = "study-habit-pending-setup-key";
@@ -308,6 +309,13 @@ export const api = {
     return apiRequest<{ enabled: boolean; time: string }>(
       "/parent/notifications",
       { method: "PATCH", body: JSON.stringify(input) },
+      { parent: true }
+    );
+  },
+  updateNextSuggestion(subject: StudySubject) {
+    return apiRequest<{ subject: StudySubject; targetDate: string }>(
+      "/parent/suggestion",
+      { method: "POST", body: JSON.stringify({ subject }) },
       { parent: true }
     );
   },

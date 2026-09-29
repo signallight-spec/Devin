@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  addLocalDays,
+  isStudySubject,
+  localDateInTokyo,
+  STUDY_SUBJECTS,
+  type StudySubject
+} from "../../shared/domain";
 import {
   ApiError,
   api,
@@ -14,6 +21,7 @@ import {
 import { StatusMessage } from "../components/StatusMessage";
 import { FamilyKeyQrCode } from "../components/FamilyKeyQrCode";
 import { dateTime, shortDate, yen } from "../format";
+import { nextHomeRefreshDelay } from "../homeRefresh";
 import { syncExistingPushSubscription } from "../push";
 import type {
   Achievement,
@@ -22,6 +30,8 @@ import type {
   Payment,
   Settlement
 } from "../types";
+
+const DATE_REFRESH_RETRY_MS = 30_000;
 
 function ParentLogin({
   initialMessage,
@@ -101,6 +111,16 @@ export function ParentScreen() {
     enabled: true,
     time: "20:00"
   });
+  const [suggestionSubject, setSuggestionSubject] =
+    useState<StudySubject>(STUDY_SUBJECTS[0]);
+  const latestLoadId = useRef(0);
+  const suggestionRevision = useRef(0);
+  const ruleFormDirty = useRef(false);
+  const ruleFormRevision = useRef(0);
+  const notificationFormDirty = useRef(false);
+  const notificationFormRevision = useRef(0);
+  const suggestionFormDirty = useRef(false);
+  const suggestionFormRevision = useRef(0);
 
   const expireParentSession = useCallback((error: unknown): boolean => {
     if (!(error instanceof ApiError) || error.status !== 403) {
@@ -119,6 +139,13 @@ export function ParentScreen() {
       refreshFailureMessage?: string;
     } = {}
   ) => {
+    const loadId = latestLoadId.current + 1;
+    latestLoadId.current = loadId;
+    const suggestionRevisionAtStart = suggestionRevision.current;
+    const ruleFormRevisionAtStart = ruleFormRevision.current;
+    const notificationFormRevisionAtStart =
+      notificationFormRevision.current;
+    const suggestionFormRevisionAtStart = suggestionFormRevision.current;
     if (!options.preserveMessage) {
       setMessage("");
     }
@@ -130,16 +157,47 @@ export function ParentScreen() {
           api.rules(),
           api.payments()
         ]);
-      setDashboard(nextDashboard);
+      if (loadId !== latestLoadId.current) {
+        return false;
+      }
+      setDashboard((value) => ({
+        ...nextDashboard,
+        nextSuggestion:
+          suggestionRevisionAtStart === suggestionRevision.current
+            ? nextDashboard.nextSuggestion
+            : value?.nextSuggestion ?? nextDashboard.nextSuggestion
+      }));
       setAchievements(achievementResult.items);
       setRules(ruleResult.items);
       setPayments(paymentResult.items);
-      setRuleForm({
-        baseAmountYen: nextDashboard.currentAllowanceRule.baseAmountYen,
-        bonusAmountYen: nextDashboard.currentAllowanceRule.bonusAmountYen
-      });
-      setNotificationForm(nextDashboard.notificationSettings);
+      if (
+        !ruleFormDirty.current &&
+        ruleFormRevisionAtStart === ruleFormRevision.current
+      ) {
+        setRuleForm({
+          baseAmountYen: nextDashboard.currentAllowanceRule.baseAmountYen,
+          bonusAmountYen: nextDashboard.currentAllowanceRule.bonusAmountYen
+        });
+      }
+      if (
+        !notificationFormDirty.current &&
+        notificationFormRevisionAtStart === notificationFormRevision.current
+      ) {
+        setNotificationForm(nextDashboard.notificationSettings);
+      }
+      if (
+        !suggestionFormDirty.current &&
+        suggestionFormRevisionAtStart === suggestionFormRevision.current
+      ) {
+        setSuggestionSubject(
+          nextDashboard.nextSuggestion.subject ?? STUDY_SUBJECTS[0]
+        );
+      }
+      return true;
     } catch (error) {
+      if (loadId !== latestLoadId.current) {
+        return false;
+      }
       if (!expireParentSession(error)) {
         setTone(options.refreshFailureMessage ? "info" : "error");
         setMessage(
@@ -147,6 +205,7 @@ export function ParentScreen() {
           (error instanceof Error ? error.message : "読み込みに失敗しました。")
         );
       }
+      return false;
     }
   }, [expireParentSession]);
 
@@ -155,6 +214,67 @@ export function ParentScreen() {
       void load();
     }
   }, [authenticated, load]);
+
+  useEffect(() => {
+    if (authenticated) {
+      return;
+    }
+    latestLoadId.current += 1;
+    ruleFormDirty.current = false;
+    ruleFormRevision.current += 1;
+    notificationFormDirty.current = false;
+    notificationFormRevision.current += 1;
+    suggestionFormDirty.current = false;
+    suggestionFormRevision.current += 1;
+    setDashboard(null);
+  }, [authenticated]);
+
+  const displayedTargetDate = dashboard?.nextSuggestion.targetDate;
+  useEffect(() => {
+    if (!authenticated || !displayedTargetDate) {
+      return;
+    }
+    const displayedLocalDate = addLocalDays(displayedTargetDate, -1);
+    let timeoutId: number;
+    let cancelled = false;
+    const refreshIfDateChanged = () => {
+      window.clearTimeout(timeoutId);
+      if (localDateInTokyo(new Date()) !== displayedLocalDate) {
+        void load({ preserveMessage: true }).then((loaded) => {
+          const delay = nextHomeRefreshDelay(
+            new Date(),
+            displayedLocalDate,
+            loaded
+          );
+          if (!cancelled && delay !== null) {
+            timeoutId = window.setTimeout(refreshIfDateChanged, delay);
+          }
+        });
+        return;
+      }
+      timeoutId = window.setTimeout(
+        refreshIfDateChanged,
+        nextHomeRefreshDelay(new Date(), displayedLocalDate, false) ??
+          DATE_REFRESH_RETRY_MS
+      );
+    };
+    timeoutId = window.setTimeout(
+      refreshIfDateChanged,
+      nextHomeRefreshDelay(new Date(), displayedLocalDate, false) ??
+        DATE_REFRESH_RETRY_MS
+    );
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshIfDateChanged();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [authenticated, displayedTargetDate, load]);
 
   const settle = async () => {
     setBusy(true);
@@ -227,6 +347,8 @@ export function ParentScreen() {
     }
     const successMessage =
       "新しい小遣いルールを保存しました。過去分は変わりません。";
+    ruleFormDirty.current = false;
+    ruleFormRevision.current += 1;
     setDashboard((value) => value ? {
       ...value,
       currentAllowanceRule: rule
@@ -253,6 +375,8 @@ export function ParentScreen() {
         ...value,
         notificationSettings: settings
       } : value);
+      notificationFormDirty.current = false;
+      notificationFormRevision.current += 1;
       setNotificationForm(settings);
       setTone("success");
       setMessage(
@@ -264,6 +388,37 @@ export function ParentScreen() {
       if (!expireParentSession(error)) {
         setTone("error");
         setMessage(error instanceof Error ? error.message : "通知設定に失敗しました。");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveNextSuggestion = async () => {
+    setBusy(true);
+    setMessage("");
+    try {
+      const nextSuggestion =
+        await api.updateNextSuggestion(suggestionSubject);
+      suggestionRevision.current += 1;
+      suggestionFormDirty.current = false;
+      suggestionFormRevision.current += 1;
+      setDashboard((value) => value ? {
+        ...value,
+        nextSuggestion
+      } : value);
+      setTone("success");
+      setMessage(
+        `${shortDate(nextSuggestion.targetDate)}のおすすめを${nextSuggestion.subject}に設定しました。`
+      );
+    } catch (error) {
+      if (!expireParentSession(error)) {
+        setTone("error");
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "おすすめ科目の設定に失敗しました。"
+        );
       }
     } finally {
       setBusy(false);
@@ -443,12 +598,14 @@ export function ParentScreen() {
             1日の基本額
             <input
               min={0}
-              onChange={(event) =>
+              onChange={(event) => {
+                ruleFormDirty.current = true;
+                ruleFormRevision.current += 1;
                 setRuleForm((value) => ({
                   ...value,
                   baseAmountYen: Number(event.target.value)
-                }))
-              }
+                }));
+              }}
               step={10}
               type="number"
               value={ruleForm.baseAmountYen}
@@ -458,12 +615,14 @@ export function ParentScreen() {
             7日ごとのボーナス額
             <input
               min={0}
-              onChange={(event) =>
+              onChange={(event) => {
+                ruleFormDirty.current = true;
+                ruleFormRevision.current += 1;
                 setRuleForm((value) => ({
                   ...value,
                   bonusAmountYen: Number(event.target.value)
-                }))
-              }
+                }));
+              }}
               step={10}
               type="number"
               value={ruleForm.bonusAmountYen}
@@ -507,6 +666,48 @@ export function ParentScreen() {
         )}
       </section>
 
+      <section className="card suggestion-parent-card">
+        <p className="eyebrow">毎日の学習</p>
+        <h2>明日のおすすめ</h2>
+        <p>
+          {dashboard
+            ? `${shortDate(dashboard.nextSuggestion.targetDate)}だけ、娘ホームへ表示します。`
+            : "娘ホームへ表示する科目を選びます。"}
+          記録する科目は自由です。
+        </p>
+        <label>
+          おすすめ科目
+          <select
+            disabled={busy || !dashboard}
+            onChange={(event) => {
+              if (isStudySubject(event.target.value)) {
+                suggestionFormDirty.current = true;
+                suggestionFormRevision.current += 1;
+                setSuggestionSubject(event.target.value);
+              }
+            }}
+            value={suggestionSubject}
+          >
+            {STUDY_SUBJECTS.map((subject) => (
+              <option key={subject} value={subject}>{subject}</option>
+            ))}
+          </select>
+        </label>
+        <button
+          className="secondary-button"
+          disabled={busy || !dashboard}
+          onClick={saveNextSuggestion}
+          type="button"
+        >
+          明日のおすすめに設定
+        </button>
+        <p className="quiet-note">
+          {dashboard?.nextSuggestion.subject
+            ? `設定済み：${dashboard.nextSuggestion.subject}`
+            : "未設定の場合は日付から自動で選びます。"}
+        </p>
+      </section>
+
       <section className="card notification-parent-card">
         <p className="eyebrow">娘のAndroid端末</p>
         <h2>未達通知</h2>
@@ -514,12 +715,14 @@ export function ParentScreen() {
         <label className="toggle-row">
           <input
             checked={notificationForm.enabled}
-            onChange={(event) =>
+            onChange={(event) => {
+              notificationFormDirty.current = true;
+              notificationFormRevision.current += 1;
               setNotificationForm((value) => ({
                 ...value,
                 enabled: event.target.checked
-              }))
-            }
+              }));
+            }}
             type="checkbox"
           />
           通知をONにする
@@ -528,12 +731,14 @@ export function ParentScreen() {
           通知時刻（5分刻み）
           <input
             disabled={!notificationForm.enabled}
-            onChange={(event) =>
+            onChange={(event) => {
+              notificationFormDirty.current = true;
+              notificationFormRevision.current += 1;
               setNotificationForm((value) => ({
                 ...value,
                 time: event.target.value
-              }))
-            }
+              }));
+            }}
             step={300}
             type="time"
             value={notificationForm.time}

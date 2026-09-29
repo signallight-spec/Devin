@@ -37,9 +37,15 @@ npm run build
 
 ## Cloudflare Pages
 
+> [!IMPORTANT]
+> アプリを更新するときは、新しいコードをデプロイする前に
+> `npx wrangler d1 migrations apply study-habit --remote` を実行してください。
+> migration未適用のまま新コードを公開すると、追加された列やテーブルを参照するAPIが
+> 失敗します。Issue #3の反映には `0011_daily_study_suggestion.sql` の適用が必要です。
+
 1. D1データベース `study-habit` を作成する。
 2. `wrangler.toml` のD1 IDを、作成したデータベースのIDへ置き換える。
-3. `npx wrangler d1 migrations apply study-habit --remote` で初期マイグレーションを適用する。
+3. `npx wrangler d1 migrations apply study-habit --remote` ですべての未適用migrationを適用する。
 4. PagesのD1 bindingを `DB` として追加する。
 5. `BOOTSTRAP_TOKEN`、`PARENT_SESSION_SECRET`、`VAPID_PUBLIC_KEY` を
    Pagesの環境変数として設定する。
