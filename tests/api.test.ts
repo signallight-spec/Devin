@@ -122,6 +122,34 @@ describe("APIクライアント", () => {
     expect(requestBody.targetMinutes).toBe(25);
   });
 
+  it("親セッションで明日のおすすめ科目を送る", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          subject: "社会",
+          targetDate: "2026-09-24"
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(api.updateNextSuggestion("社会")).resolves.toEqual({
+      subject: "社会",
+      targetDate: "2026-09-24"
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/parent/suggestion");
+    const headers = new Headers(fetchMock.mock.calls[0][1]?.headers);
+    expect(headers.get("Authorization")).toBe("Bearer parent-token");
+    expect(
+      JSON.parse(String(fetchMock.mock.calls[0][1]?.body))
+    ).toEqual({ subject: "社会" });
+  });
+
   it("確認前の再発行キーを再読み込み後も保持する", () => {
     const rotatedKey = "B".repeat(43);
     setPendingRotatedKey(rotatedKey);

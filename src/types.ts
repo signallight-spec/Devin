@@ -1,3 +1,5 @@
+import type { StudySubject } from "../shared/domain";
+
 export interface AllowanceRule {
   id: number;
   baseAmountYen: number;
@@ -42,6 +44,10 @@ export interface Achievement {
 export interface Today {
   localDate: string;
   goalMinutes: number;
+  suggestion: {
+    subject: StudySubject;
+    parentSelected: boolean;
+  };
   currentStreakDays: number;
   achievement: Achievement | null;
   allowanceRule: AllowanceRule;
@@ -74,6 +80,10 @@ export interface ParentDashboard {
   notificationSettings: {
     enabled: boolean;
     time: string;
+  };
+  nextSuggestion: {
+    subject: StudySubject | null;
+    targetDate: string;
   };
 }
 

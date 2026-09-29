@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  isStudySubject,
+  STUDY_SUBJECTS,
+  type StudySubject
+} from "../../shared/domain";
+import {
   ApiError,
   api,
   clearPendingRotatedKey,
@@ -101,6 +106,8 @@ export function ParentScreen() {
     enabled: true,
     time: "20:00"
   });
+  const [suggestionSubject, setSuggestionSubject] =
+    useState<StudySubject>(STUDY_SUBJECTS[0]);
 
   const expireParentSession = useCallback((error: unknown): boolean => {
     if (!(error instanceof ApiError) || error.status !== 403) {
@@ -139,6 +146,9 @@ export function ParentScreen() {
         bonusAmountYen: nextDashboard.currentAllowanceRule.bonusAmountYen
       });
       setNotificationForm(nextDashboard.notificationSettings);
+      setSuggestionSubject(
+        nextDashboard.nextSuggestion.subject ?? STUDY_SUBJECTS[0]
+      );
     } catch (error) {
       if (!expireParentSession(error)) {
         setTone(options.refreshFailureMessage ? "info" : "error");
@@ -264,6 +274,34 @@ export function ParentScreen() {
       if (!expireParentSession(error)) {
         setTone("error");
         setMessage(error instanceof Error ? error.message : "通知設定に失敗しました。");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveNextSuggestion = async () => {
+    setBusy(true);
+    setMessage("");
+    try {
+      const nextSuggestion =
+        await api.updateNextSuggestion(suggestionSubject);
+      setDashboard((value) => value ? {
+        ...value,
+        nextSuggestion
+      } : value);
+      setTone("success");
+      setMessage(
+        `${shortDate(nextSuggestion.targetDate)}のおすすめを${nextSuggestion.subject}に設定しました。`
+      );
+    } catch (error) {
+      if (!expireParentSession(error)) {
+        setTone("error");
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "おすすめ科目の設定に失敗しました。"
+        );
       }
     } finally {
       setBusy(false);
@@ -505,6 +543,45 @@ export function ParentScreen() {
             ))}
           </div>
         )}
+      </section>
+
+      <section className="card suggestion-parent-card">
+        <p className="eyebrow">毎日の学習</p>
+        <h2>明日のおすすめ</h2>
+        <p>
+          {dashboard
+            ? `${shortDate(dashboard.nextSuggestion.targetDate)}だけ、娘ホームへ表示します。`
+            : "娘ホームへ表示する科目を選びます。"}
+          記録する科目は自由です。
+        </p>
+        <label>
+          おすすめ科目
+          <select
+            onChange={(event) => {
+              if (isStudySubject(event.target.value)) {
+                setSuggestionSubject(event.target.value);
+              }
+            }}
+            value={suggestionSubject}
+          >
+            {STUDY_SUBJECTS.map((subject) => (
+              <option key={subject} value={subject}>{subject}</option>
+            ))}
+          </select>
+        </label>
+        <button
+          className="secondary-button"
+          disabled={busy}
+          onClick={saveNextSuggestion}
+          type="button"
+        >
+          明日のおすすめに設定
+        </button>
+        <p className="quiet-note">
+          {dashboard?.nextSuggestion.subject
+            ? `設定済み：${dashboard.nextSuggestion.subject}`
+            : "未設定の場合は日付から自動で選びます。"}
+        </p>
       </section>
 
       <section className="card notification-parent-card">

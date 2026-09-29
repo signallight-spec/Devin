@@ -70,6 +70,33 @@ afterEach(() => {
 });
 
 describe("D1スキーマ", () => {
+  it("翌日のおすすめは固定5科目だけ保存できる", () => {
+    database.exec(`
+      UPDATE app_settings
+      SET next_suggestion = '数学', next_suggestion_date = '2026-09-24'
+      WHERE id = 1;
+    `);
+    expect(
+      database
+        .prepare(
+          `SELECT next_suggestion, next_suggestion_date
+           FROM app_settings
+           WHERE id = 1`
+        )
+        .get()
+    ).toEqual({
+      next_suggestion: "数学",
+      next_suggestion_date: "2026-09-24"
+    });
+    expect(() =>
+      database.exec(`
+        UPDATE app_settings
+        SET next_suggestion = '音楽'
+        WHERE id = 1;
+      `)
+    ).toThrow();
+  });
+
   it("既存の達成記録を保持したまま小遣いルール順序を移行する", () => {
     const upgrade = new DatabaseSync(":memory:");
     try {

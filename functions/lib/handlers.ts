@@ -4,8 +4,10 @@ import {
   calculateReward,
   calculateStreak,
   displayedStreak,
+  isStudySubject,
   localDateInTokyo,
-  mondayWeekRange
+  mondayWeekRange,
+  studySuggestionForDate
 } from "../../shared/domain";
 import {
   createParentSession,
@@ -286,9 +288,17 @@ async function handleToday(
       .first<{ count: number }>()
   ]);
   requireRule(rule);
+  const scheduledSuggestion =
+    settings.next_suggestion_date === today
+      ? settings.next_suggestion
+      : null;
   return json({
     localDate: today,
     goalMinutes: settings.goal_minutes,
+    suggestion: {
+      subject: scheduledSuggestion ?? studySuggestionForDate(today),
+      parentSelected: scheduledSuggestion !== null
+    },
     currentStreakDays,
     achievement: achievement ? mapAchievement(achievement) : null,
     allowanceRule: mapRule(rule),
@@ -783,6 +793,7 @@ async function handleParentDashboard(env: Env, now: Date): Promise<Response> {
   if (!settings) {
     throw new HttpError(409, "SETUP_REQUIRED", "初期設定が必要です。");
   }
+  const targetDate = addLocalDays(today, 1);
   return json({
     unpaidBalanceYen: aggregate?.amount ?? 0,
     unpaidAchievementCount: aggregate?.count ?? 0,
@@ -793,8 +804,37 @@ async function handleParentDashboard(env: Env, now: Date): Promise<Response> {
     notificationSettings: {
       enabled: Boolean(settings.notifications_enabled),
       time: settings.notification_time
+    },
+    nextSuggestion: {
+      subject:
+        settings.next_suggestion_date === targetDate
+          ? settings.next_suggestion
+          : null,
+      targetDate
     }
   });
+}
+
+async function handleNextSuggestionUpdate(
+  request: Request,
+  env: Env,
+  now: Date
+): Promise<Response> {
+  const body = await readJsonObject(request);
+  rejectUnknownKeys(body, ["subject"]);
+  if (!isStudySubject(body.subject)) {
+    throw new HttpError(400, "INVALID_INPUT", "おすすめ科目が正しくありません。");
+  }
+  const targetDate = addLocalDays(localDateInTokyo(now), 1);
+  await env.DB
+    .prepare(
+      `UPDATE app_settings
+       SET next_suggestion = ?, next_suggestion_date = ?, updated_at_utc = ?
+       WHERE id = 1`
+    )
+    .bind(body.subject, targetDate, now.toISOString())
+    .run();
+  return json({ subject: body.subject, targetDate });
 }
 
 async function handleNotificationSettingsUpdate(
@@ -1288,6 +1328,9 @@ export async function handleApi(
   }
   if (path === "/parent/notifications" && method === "PATCH") {
     return handleNotificationSettingsUpdate(request, env, now);
+  }
+  if (path === "/parent/suggestion" && method === "POST") {
+    return handleNextSuggestionUpdate(request, env, now);
   }
   if (path === "/parent/payments" && method === "GET") {
     return handlePaymentsGet(env);

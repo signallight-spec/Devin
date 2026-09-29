@@ -10,7 +10,11 @@ import {
 import { getCurrentRule, getSettings } from "../functions/lib/data";
 import { errorResponse } from "../functions/lib/http";
 import type { Env } from "../functions/lib/types";
-import { addLocalDays, localDateInTokyo } from "../shared/domain";
+import {
+  addLocalDays,
+  localDateInTokyo,
+  studySuggestionForDate
+} from "../shared/domain";
 
 const VALID_PUSH_PUBLIC_KEY =
   "BN61JE9DZj-_5DlakXIAWcw5HcdoxRrTz2Gc-9ZCLayd6QCiR0G2KqgiTkYD85gSe503T1ueCEXG3O2GHrbZmIs";
@@ -215,6 +219,102 @@ describe("APIハンドラー", () => {
       available: true,
       publicKey: "public-key"
     });
+  });
+
+  it("親指定を対象日だけ今日のおすすめへ反映する", async () => {
+    const now = new Date();
+    const targetNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const followingNow = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    const targetDate = localDateInTokyo(targetNow);
+    const followingDate = localDateInTokyo(followingNow);
+    const tokenResponse = await handleApi(
+      request(
+        "/parent/session",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: "1234" })
+        },
+        familyKey
+      ),
+      env,
+      now
+    );
+    const token =
+      (await responseJson<{ token: string }>(tokenResponse)).token;
+    const saved = await handleApi(
+      request(
+        "/parent/suggestion",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subject: "理科" })
+        },
+        familyKey,
+        token
+      ),
+      env,
+      now
+    );
+
+    expect(await responseJson(saved)).toEqual({
+      subject: "理科",
+      targetDate
+    });
+
+    const dashboard = await handleApi(
+      request("/parent/dashboard", {}, familyKey, token),
+      env,
+      now
+    );
+    expect(
+      (await responseJson<{
+        nextSuggestion: { subject: string; targetDate: string };
+      }>(dashboard)).nextSuggestion
+    ).toEqual({ subject: "理科", targetDate });
+
+    const targetDay = await handleApi(
+      request("/today", {}, familyKey),
+      env,
+      targetNow
+    );
+    expect(
+      (await responseJson<{
+        suggestion: { subject: string; parentSelected: boolean };
+      }>(targetDay)).suggestion
+    ).toEqual({ subject: "理科", parentSelected: true });
+
+    const followingDay = await handleApi(
+      request("/today", {}, familyKey),
+      env,
+      followingNow
+    );
+    expect(
+      (await responseJson<{
+        suggestion: { subject: string; parentSelected: boolean };
+      }>(followingDay)).suggestion
+    ).toEqual({
+      subject: studySuggestionForDate(followingDate),
+      parentSelected: false
+    });
+  });
+
+  it("プリセット外のおすすめ科目を拒否する", async () => {
+    const token = await parentToken();
+    const response = await handleRequest(
+      request(
+        "/parent/suggestion",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subject: "音楽" })
+        },
+        familyKey,
+        token
+      )
+    );
+
+    expect(response.status).toBe(400);
   });
 
   it("AndroidのPush購読を登録・解除する", async () => {
