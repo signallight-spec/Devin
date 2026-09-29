@@ -52,17 +52,56 @@ describe("学習記録の計算", () => {
   });
 
   it("7日ごとの達成日だけボーナスを加算する", () => {
-    expect(calculateReward(6, 100, 7, 300)).toEqual({
+    const noOverGoal = { enabled: false, minutes: 40, amountYen: 50 };
+    expect(calculateReward(6, 100, 7, 300, noOverGoal, 25)).toEqual({
       baseAmountYen: 100,
       bonusAmountYen: 0,
+      overGoalAmountYen: 0,
       totalAmountYen: 100
     });
-    expect(calculateReward(7, 100, 7, 300)).toEqual({
+    expect(calculateReward(7, 100, 7, 300, noOverGoal, 25)).toEqual({
       baseAmountYen: 100,
       bonusAmountYen: 300,
+      overGoalAmountYen: 0,
       totalAmountYen: 400
     });
-    expect(calculateReward(14, 100, 7, 300).totalAmountYen).toBe(400);
+    expect(
+      calculateReward(14, 100, 7, 300, noOverGoal, 25).totalAmountYen
+    ).toBe(400);
+  });
+
+  it("ボーナス目標分数以上の記録に超過ボーナスを加算する", () => {
+    const overGoal = { enabled: true, minutes: 40, amountYen: 50 };
+    expect(
+      calculateReward(1, 100, 7, 300, overGoal, 40)
+    ).toEqual({
+      baseAmountYen: 100,
+      bonusAmountYen: 0,
+      overGoalAmountYen: 50,
+      totalAmountYen: 150
+    });
+    expect(
+      calculateReward(1, 100, 7, 300, overGoal, 90).overGoalAmountYen
+    ).toBe(50);
+    expect(
+      calculateReward(1, 100, 7, 300, overGoal, 39).totalAmountYen
+    ).toBe(100);
+    expect(
+      calculateReward(7, 100, 7, 300, overGoal, 60).totalAmountYen
+    ).toBe(450);
+  });
+
+  it("ボーナス無効時は目標超過でも加算しない", () => {
+    expect(
+      calculateReward(
+        1,
+        100,
+        7,
+        300,
+        { enabled: false, minutes: 40, amountYen: 50 },
+        180
+      ).totalAmountYen
+    ).toBe(100);
   });
 
   it("最後の達成が昨日より前なら表示上の連続日数を0にする", () => {

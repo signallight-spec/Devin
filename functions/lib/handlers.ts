@@ -536,7 +536,13 @@ async function handleCreateAchievement(
   const requestedTargetMinutes =
     method === "timer"
       ? integerInRange(body, "targetMinutes", 5, 180)
-      : settings.goal_minutes;
+      : integerInRange(
+          body,
+          "targetMinutes",
+          5,
+          180,
+          settings.goal_minutes
+        );
   if (!isGoalMinutes(requestedTargetMinutes)) {
     throw new HttpError(
       400,
@@ -581,7 +587,13 @@ async function handleCreateAchievement(
     streakDays,
     rule.base_amount_yen,
     rule.bonus_interval_days,
-    rule.bonus_amount_yen
+    rule.bonus_amount_yen,
+    {
+      enabled: rule.over_goal_bonus_enabled === 1,
+      minutes: rule.over_goal_minutes,
+      amountYen: rule.over_goal_amount_yen
+    },
+    targetMinutes
   );
   const id = crypto.randomUUID();
   try {
@@ -589,9 +601,9 @@ async function handleCreateAchievement(
       .prepare(
         `INSERT INTO achievements
           (id, local_date, method, subject, note, target_minutes, streak_days,
-           base_amount_yen, bonus_amount_yen, total_amount_yen,
-           allowance_rule_id, achieved_at_utc)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           base_amount_yen, bonus_amount_yen, over_goal_amount_yen,
+           total_amount_yen, allowance_rule_id, achieved_at_utc)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         id,
@@ -603,6 +615,7 @@ async function handleCreateAchievement(
         streakDays,
         reward.baseAmountYen,
         reward.bonusAmountYen,
+        reward.overGoalAmountYen,
         reward.totalAmountYen,
         rule.id,
         nowIso
@@ -968,7 +981,13 @@ async function handleRulesPost(
   now: Date
 ): Promise<Response> {
   const body = await readJsonObject(request);
-  rejectUnknownKeys(body, ["baseAmountYen", "bonusAmountYen"]);
+  rejectUnknownKeys(body, [
+    "baseAmountYen",
+    "bonusAmountYen",
+    "overGoalBonusEnabled",
+    "overGoalMinutes",
+    "overGoalAmountYen"
+  ]);
   const baseAmountYen = integerInRange(body, "baseAmountYen", 0, 100_000);
   const bonusAmountYen = integerInRange(
     body,
@@ -976,18 +995,54 @@ async function handleRulesPost(
     0,
     100_000
   );
+  if (
+    body["overGoalBonusEnabled"] !== undefined &&
+    typeof body["overGoalBonusEnabled"] !== "boolean"
+  ) {
+    throw new HttpError(
+      400,
+      "INVALID_INPUT",
+      "overGoalBonusEnabledが正しくありません。"
+    );
+  }
+  const overGoalBonusEnabled = body["overGoalBonusEnabled"] === true;
+  const overGoalMinutes = integerInRange(
+    body,
+    "overGoalMinutes",
+    5,
+    180,
+    60
+  );
+  if (!isGoalMinutes(overGoalMinutes)) {
+    throw new HttpError(
+      400,
+      "INVALID_INPUT",
+      "overGoalMinutesは5分刻みにしてください。"
+    );
+  }
+  const overGoalAmountYen = integerInRange(
+    body,
+    "overGoalAmountYen",
+    0,
+    100_000,
+    0
+  );
   const nowIso = now.toISOString();
   const result = await env.DB
     .prepare(
       `INSERT INTO allowance_rules
         (base_amount_yen, bonus_interval_days, bonus_amount_yen,
+         over_goal_bonus_enabled, over_goal_minutes, over_goal_amount_yen,
          effective_from_utc, created_at_utc)
-       VALUES (?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       baseAmountYen,
       BONUS_INTERVAL_DAYS,
       bonusAmountYen,
+      overGoalBonusEnabled ? 1 : 0,
+      overGoalMinutes,
+      overGoalAmountYen,
       nowIso,
       nowIso
     )
@@ -1137,9 +1192,11 @@ async function handleExport(env: Env): Promise<Response> {
          a.method,
          a.subject,
          a.note,
+         a.target_minutes,
          a.streak_days,
          a.base_amount_yen,
          a.bonus_amount_yen,
+         a.over_goal_amount_yen,
          a.total_amount_yen,
          p.paid_at_utc
        FROM achievements a
@@ -1152,9 +1209,11 @@ async function handleExport(env: Env): Promise<Response> {
       method: string;
       subject: string | null;
       note: string | null;
+      target_minutes: number;
       streak_days: number;
       base_amount_yen: number;
       bonus_amount_yen: number;
+      over_goal_amount_yen: number;
       total_amount_yen: number;
       paid_at_utc: string | null;
     }>();
@@ -1163,9 +1222,11 @@ async function handleExport(env: Env): Promise<Response> {
     "記録方法",
     "科目",
     "メモ",
+    "分数",
     "連続日数",
     "基本額",
     "ボーナス",
+    "がんばりボーナス",
     "合計額",
     "支払日時"
   ];
@@ -1177,9 +1238,11 @@ async function handleExport(env: Env): Promise<Response> {
         row.method === "timer" ? "タイマー" : "自己申告",
         row.subject,
         row.note,
+        row.target_minutes,
         row.streak_days,
         row.base_amount_yen,
         row.bonus_amount_yen,
+        row.over_goal_amount_yen,
         row.total_amount_yen,
         row.paid_at_utc
       ]

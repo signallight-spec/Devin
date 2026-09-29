@@ -30,6 +30,9 @@ export function mapRule(row: AllowanceRuleRow) {
     baseAmountYen: row.base_amount_yen,
     bonusIntervalDays: row.bonus_interval_days,
     bonusAmountYen: row.bonus_amount_yen,
+    overGoalBonusEnabled: row.over_goal_bonus_enabled === 1,
+    overGoalMinutes: row.over_goal_minutes,
+    overGoalAmountYen: row.over_goal_amount_yen,
     effectiveFrom: row.effective_from_utc
   };
 }
@@ -45,6 +48,7 @@ export function mapAchievement(row: AchievementRow) {
     streakDays: row.streak_days,
     baseAmountYen: row.base_amount_yen,
     bonusAmountYen: row.bonus_amount_yen,
+    overGoalAmountYen: row.over_goal_amount_yen,
     totalAmountYen: row.total_amount_yen,
     achievedAt: row.achieved_at_utc,
     paid: Boolean(row.paid)

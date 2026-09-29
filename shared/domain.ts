@@ -146,17 +146,35 @@ export function characterMood(
   return "famished";
 }
 
+export interface OverGoalBonusRule {
+  enabled: boolean;
+  minutes: number;
+  amountYen: number;
+}
+
 export function calculateReward(
   streakDays: number,
   baseAmountYen: number,
   bonusIntervalDays: number,
-  bonusAmountYen: number
-): { baseAmountYen: number; bonusAmountYen: number; totalAmountYen: number } {
+  bonusAmountYen: number,
+  overGoalBonus: OverGoalBonusRule,
+  targetMinutes: number
+): {
+  baseAmountYen: number;
+  bonusAmountYen: number;
+  overGoalAmountYen: number;
+  totalAmountYen: number;
+} {
   const bonus = streakDays % bonusIntervalDays === 0 ? bonusAmountYen : 0;
+  const overGoal =
+    overGoalBonus.enabled && targetMinutes >= overGoalBonus.minutes
+      ? overGoalBonus.amountYen
+      : 0;
   return {
     baseAmountYen,
     bonusAmountYen: bonus,
-    totalAmountYen: baseAmountYen + bonus
+    overGoalAmountYen: overGoal,
+    totalAmountYen: baseAmountYen + bonus + overGoal
   };
 }
 

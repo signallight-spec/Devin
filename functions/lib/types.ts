@@ -32,6 +32,9 @@ export interface AllowanceRuleRow {
   base_amount_yen: number;
   bonus_interval_days: number;
   bonus_amount_yen: number;
+  over_goal_bonus_enabled: number;
+  over_goal_minutes: number;
+  over_goal_amount_yen: number;
   effective_from_utc: string;
   created_at_utc: string;
 }
@@ -46,6 +49,7 @@ export interface AchievementRow {
   streak_days: number;
   base_amount_yen: number;
   bonus_amount_yen: number;
+  over_goal_amount_yen: number;
   total_amount_yen: number;
   allowance_rule_id: number;
   achieved_at_utc: string;

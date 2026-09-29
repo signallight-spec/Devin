@@ -1037,6 +1037,209 @@ describe("APIハンドラー", () => {
     });
   });
 
+  function enableOverGoalBonus(): void {
+    testD1.sqlite.exec(
+      `UPDATE allowance_rules
+       SET over_goal_bonus_enabled = 1,
+           over_goal_minutes = 40,
+           over_goal_amount_yen = 50
+       WHERE id = 1`
+    );
+  }
+
+  function postAchievement(
+    payload: Record<string, unknown>
+  ): Promise<Response> {
+    return handleApi(
+      request(
+        "/achievements",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        },
+        familyKey
+      ),
+      env
+    );
+  }
+
+  it("タイマー記録がボーナス目標分数以上なら超過ボーナスを付ける", async () => {
+    enableOverGoalBonus();
+    const response = await postAchievement({
+      method: "timer",
+      targetMinutes: 45
+    });
+    const body = await responseJson<{
+      achievement: {
+        targetMinutes: number;
+        overGoalAmountYen: number;
+        totalAmountYen: number;
+      };
+    }>(response);
+
+    expect(response.status).toBe(201);
+    expect(body.achievement).toMatchObject({
+      targetMinutes: 45,
+      overGoalAmountYen: 50,
+      totalAmountYen: 150
+    });
+  });
+
+  it("自己申告の申告分数でも超過ボーナスを付ける", async () => {
+    enableOverGoalBonus();
+    const response = await postAchievement({
+      method: "self_report",
+      targetMinutes: 40
+    });
+    const body = await responseJson<{
+      achievement: {
+        targetMinutes: number;
+        overGoalAmountYen: number;
+        totalAmountYen: number;
+      };
+    }>(response);
+
+    expect(response.status).toBe(201);
+    expect(body.achievement).toMatchObject({
+      targetMinutes: 40,
+      overGoalAmountYen: 50,
+      totalAmountYen: 150
+    });
+  });
+
+  it("未入力の自己申告は目標分数として記録しボーナスを付けない", async () => {
+    enableOverGoalBonus();
+    const response = await postAchievement({ method: "self_report" });
+    const body = await responseJson<{
+      achievement: {
+        targetMinutes: number;
+        overGoalAmountYen: number;
+        totalAmountYen: number;
+      };
+    }>(response);
+
+    expect(response.status).toBe(201);
+    expect(body.achievement).toMatchObject({
+      targetMinutes: 25,
+      overGoalAmountYen: 0,
+      totalAmountYen: 100
+    });
+  });
+
+  it("ボーナス目標未満の記録はボーナスを付けない", async () => {
+    enableOverGoalBonus();
+    const response = await postAchievement({
+      method: "self_report",
+      targetMinutes: 35
+    });
+    const body = await responseJson<{
+      achievement: {
+        targetMinutes: number;
+        overGoalAmountYen: number;
+        totalAmountYen: number;
+      };
+    }>(response);
+
+    expect(response.status).toBe(201);
+    expect(body.achievement).toMatchObject({
+      targetMinutes: 35,
+      overGoalAmountYen: 0,
+      totalAmountYen: 100
+    });
+  });
+
+  it("超過ボーナス無効では分数が多くても加算しない", async () => {
+    const response = await postAchievement({
+      method: "timer",
+      targetMinutes: 180
+    });
+    const body = await responseJson<{
+      achievement: { overGoalAmountYen: number; totalAmountYen: number };
+    }>(response);
+
+    expect(response.status).toBe(201);
+    expect(body.achievement).toMatchObject({
+      overGoalAmountYen: 0,
+      totalAmountYen: 100
+    });
+  });
+
+  it("小遣いルールに超過ボーナス設定を保存する", async () => {
+    const token = await parentToken();
+    const created = await handleApi(
+      request(
+        "/parent/allowance-rules",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            baseAmountYen: 100,
+            bonusAmountYen: 300,
+            overGoalBonusEnabled: true,
+            overGoalMinutes: 45,
+            overGoalAmountYen: 60
+          })
+        },
+        familyKey,
+        token
+      ),
+      env
+    );
+    const rule = await responseJson<{
+      overGoalBonusEnabled: boolean;
+      overGoalMinutes: number;
+      overGoalAmountYen: number;
+    }>(created);
+
+    expect(created.status).toBe(201);
+    expect(rule).toMatchObject({
+      overGoalBonusEnabled: true,
+      overGoalMinutes: 45,
+      overGoalAmountYen: 60
+    });
+
+    const invalidToggle = await handleRequest(
+      request(
+        "/parent/allowance-rules",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            baseAmountYen: 100,
+            bonusAmountYen: 300,
+            overGoalBonusEnabled: "true",
+            overGoalMinutes: 45,
+            overGoalAmountYen: 60
+          })
+        },
+        familyKey,
+        token
+      )
+    );
+    expect(invalidToggle.status).toBe(400);
+
+    const invalidMinutes = await handleRequest(
+      request(
+        "/parent/allowance-rules",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            baseAmountYen: 100,
+            bonusAmountYen: 300,
+            overGoalBonusEnabled: true,
+            overGoalMinutes: 43,
+            overGoalAmountYen: 60
+          })
+        },
+        familyKey,
+        token
+      )
+    );
+    expect(invalidMinutes.status).toBe(400);
+  });
+
   it("新しい小遣いルールのボーナス間隔を7日に固定する", async () => {
     const token = await parentToken();
     const created = await handleApi(
@@ -1300,6 +1503,22 @@ describe("APIハンドラー", () => {
     expect(csv).toContain(
       "\"一行目\n  '@IMPORTXML(\"\"https://example.test\"\")\""
     );
+  });
+
+  it("CSV出力に分数と超過ボーナスを含める", async () => {
+    enableOverGoalBonus();
+    await postAchievement({ method: "self_report", targetMinutes: 45 });
+    const token = await parentToken();
+    const response = await handleApi(
+      request("/parent/export.csv", {}, familyKey, token),
+      env
+    );
+    const csv = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(csv).toContain("分数");
+    expect(csv).toContain("がんばりボーナス");
+    expect(csv).toContain('"45","1","100","0","50","150"');
   });
 
   it("金額0円の達成も支払い済みにできる", async () => {

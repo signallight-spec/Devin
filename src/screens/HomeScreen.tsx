@@ -15,11 +15,13 @@ const RECORDED_REFRESH_FAILURE_MESSAGE =
   "学習は記録済みですが、表示の同期に失敗しました。再読み込みしてください。";
 
 function RecordForm({
+  goalMinutes,
   method,
   onCancel,
   onRecorded,
   targetMinutes
 }: {
+  goalMinutes: number;
   method: "timer" | "self_report";
   onCancel: () => void;
   onRecorded: (result: {
@@ -30,6 +32,7 @@ function RecordForm({
 }) {
   const [subject, setSubject] = useState("");
   const [note, setNote] = useState("");
+  const [effortMinutes, setEffortMinutes] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -41,7 +44,11 @@ function RecordForm({
         method,
         subject: subject.trim() || null,
         note: note.trim() || null,
-        ...(method === "timer" ? { targetMinutes } : {})
+        ...(method === "timer"
+          ? { targetMinutes }
+          : effortMinutes !== ""
+            ? { targetMinutes: Number(effortMinutes) }
+            : {})
       });
       onRecorded(result);
     } catch (error) {
@@ -55,6 +62,20 @@ function RecordForm({
     <section className="card record-card">
       <p className="eyebrow">{method === "timer" ? "タイマー完走" : "自己申告"}</p>
       <h2>今日の学習を記録</h2>
+      {method === "self_report" && (
+        <label>
+          がんばった分数（任意）
+          <input
+            max={180}
+            min={5}
+            onChange={(event) => setEffortMinutes(event.target.value)}
+            placeholder={`未入力なら ${goalMinutes}分`}
+            step={5}
+            type="number"
+            value={effortMinutes}
+          />
+        </label>
+      )}
       <label>
         科目（任意）
         <input
@@ -260,6 +281,7 @@ export function HomeScreen({
   if (recordMethod) {
     return (
       <RecordForm
+        goalMinutes={today.goalMinutes}
         method={recordMethod}
         targetMinutes={recordMethod === "timer" ? timer.targetMinutes ?? undefined : undefined}
         onCancel={() => {
@@ -347,6 +369,12 @@ export function HomeScreen({
       <p className="quiet-note">
         {today.allowanceRule.bonusIntervalDays}日ごとの達成日に{" "}
         {yen(today.allowanceRule.bonusAmountYen)} の連続ボーナス。
+        {today.allowanceRule.overGoalBonusEnabled && (
+          <>
+            {" "}さらに{today.allowanceRule.overGoalMinutes}分以上がんばると{" "}
+            {yen(today.allowanceRule.overGoalAmountYen)} のボーナス。
+          </>
+        )}
       </p>
     </div>
   );

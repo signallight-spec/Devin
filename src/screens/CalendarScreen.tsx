@@ -115,7 +115,16 @@ export function CalendarScreen() {
           </div>
           <div className="selected-reward">
             <strong>{yen(selected.totalAmountYen)}</strong>
-            <span>{selected.streakDays}日連続</span>
+            <span>{selected.streakDays}日連続・{selected.targetMinutes}分</span>
+            {(selected.bonusAmountYen > 0 || selected.overGoalAmountYen > 0) && (
+              <span>
+                基本 {yen(selected.baseAmountYen)}
+                {selected.bonusAmountYen > 0 &&
+                  ` ＋ 連続ボーナス ${yen(selected.bonusAmountYen)}`}
+                {selected.overGoalAmountYen > 0 &&
+                  ` ＋ がんばりボーナス ${yen(selected.overGoalAmountYen)}`}
+              </span>
+            )}
           </div>
         </section>
       )}
