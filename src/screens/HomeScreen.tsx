@@ -8,9 +8,11 @@ import { StatusMessage } from "../components/StatusMessage";
 import { timerText, yen } from "../format";
 import { nextHomeRefreshDelay } from "../homeRefresh";
 import type { StudyTimer } from "../hooks/useTimer";
-import type { Today } from "../types";
+import type { Achievement, Today } from "../types";
 
 const DATE_REFRESH_RETRY_MS = 30_000;
+const RECORDED_REFRESH_FAILURE_MESSAGE =
+  "学習は記録済みですが、表示の同期に失敗しました。再読み込みしてください。";
 
 function RecordForm({
   method,
@@ -20,7 +22,7 @@ function RecordForm({
 }: {
   method: "timer" | "self_report";
   onCancel: () => void;
-  onRecorded: (today: Today) => void;
+  onRecorded: (achievement: Achievement) => void;
   targetMinutes?: number;
 }) {
   const [subject, setSubject] = useState("");
@@ -32,13 +34,13 @@ function RecordForm({
     setBusy(true);
     setMessage("");
     try {
-      await api.createAchievement({
+      const result = await api.createAchievement({
         method,
         subject: subject.trim() || null,
         note: note.trim() || null,
         ...(method === "timer" ? { targetMinutes } : {})
       });
-      onRecorded(await api.today());
+      onRecorded(result.achievement);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "記録に失敗しました。");
     } finally {
@@ -96,7 +98,7 @@ export function HomeScreen({
   const [loading, setLoading] = useState(true);
   const [keyResetBusy, setKeyResetBusy] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (refreshFailureMessage?: string) => {
     setLoading(true);
     setMessage("");
     try {
@@ -106,7 +108,7 @@ export function HomeScreen({
       return true;
     } catch (error) {
       if (error instanceof Error) {
-        setMessage(error.message);
+        setMessage(refreshFailureMessage ?? error.message);
       }
       return false;
     } finally {
@@ -197,7 +199,13 @@ export function HomeScreen({
       <section className="card">
         <StatusMessage message={message || "読み込めませんでした。"} />
         <div className="button-row">
-          <button className="secondary-button" onClick={load} type="button">再試行</button>
+          <button
+            className="secondary-button"
+            onClick={() => void load()}
+            type="button"
+          >
+            再試行
+          </button>
           <button
             className="text-button"
             disabled={keyResetBusy}
@@ -232,6 +240,16 @@ export function HomeScreen({
           <div><span>科目</span><strong>{today.achievement.subject || "未入力"}</strong></div>
           <div><span>一言メモ</span><strong>{today.achievement.note || "未入力"}</strong></div>
         </section>
+        <StatusMessage message={message} />
+        {message && (
+          <button
+            className="secondary-button"
+            onClick={() => void load(RECORDED_REFRESH_FAILURE_MESSAGE)}
+            type="button"
+          >
+            表示を再読み込み
+          </button>
+        )}
       </div>
     );
   }
@@ -244,10 +262,15 @@ export function HomeScreen({
         onCancel={() => {
           setRecordMethod(null);
         }}
-        onRecorded={(nextToday) => {
+        onRecorded={(achievement) => {
           timer.reset();
-          setToday(nextToday);
+          setToday((value) => value ? {
+            ...value,
+            achievement,
+            currentStreakDays: achievement.streakDays
+          } : value);
           setRecordMethod(null);
+          void load(RECORDED_REFRESH_FAILURE_MESSAGE);
         }}
       />
     );

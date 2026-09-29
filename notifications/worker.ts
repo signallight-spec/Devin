@@ -130,6 +130,27 @@ async function releaseSubscriptionClaim(
     .run();
 }
 
+async function markSubscriptionFailedOrRelease(
+  env: NotificationEnv,
+  localDate: string,
+  deviceId: string,
+  claimToken: string,
+  now: Date
+): Promise<void> {
+  try {
+    await markSubscriptionResult(
+      env,
+      localDate,
+      deviceId,
+      claimToken,
+      "failed",
+      now
+    );
+  } catch {
+    await releaseSubscriptionClaim(env, localDate, deviceId, claimToken);
+  }
+}
+
 async function achievementExists(
   env: NotificationEnv,
   localDate: string
@@ -274,12 +295,17 @@ export async function processReminder(
         );
         return;
       }
+      let response: Response;
       try {
-        const response = await fetch(subscription.endpoint, {
+        response = await fetch(subscription.endpoint, {
           ...payload,
           redirect: "manual"
         });
-        if (response.ok) {
+      } catch {
+        return;
+      }
+      if (response.ok) {
+        try {
           const marked = await markSubscriptionResult(
             env,
             timing.localDate,
@@ -310,48 +336,38 @@ export async function processReminder(
               )
               .run();
           }
+        } catch {
           return;
         }
-        if (response.status === 404 || response.status === 410) {
-          await env.DB
-            .prepare(
-              `DELETE FROM push_subscriptions
-               WHERE endpoint = ?
-                AND device_id = ?
-                AND p256dh = ?
-                AND auth = ?
-                AND updated_at_utc = ?`
-            )
-            .bind(
-              subscription.endpoint,
-              subscription.device_id,
-              subscription.p256dh,
-              subscription.auth,
-              subscription.updated_at_utc
-            )
-            .run();
-          await markSubscriptionResult(
-            env,
-            timing.localDate,
-            subscription.device_id,
-            claimToken,
-            "failed",
-            now
-          );
-          return;
-        }
-        await markSubscriptionResult(
-          env,
-          timing.localDate,
-          subscription.device_id,
-          claimToken,
-          "failed",
-          now
-        );
-      } catch {
-        // 配信結果が不明な通信例外は再送せず、1日1回を優先してpendingを残す。
         return;
       }
+      if (response.status === 404 || response.status === 410) {
+        await env.DB
+          .prepare(
+            `DELETE FROM push_subscriptions
+             WHERE endpoint = ?
+              AND device_id = ?
+              AND p256dh = ?
+              AND auth = ?
+              AND updated_at_utc = ?`
+          )
+          .bind(
+            subscription.endpoint,
+            subscription.device_id,
+            subscription.p256dh,
+            subscription.auth,
+            subscription.updated_at_utc
+          )
+          .run()
+          .catch(() => undefined);
+      }
+      await markSubscriptionFailedOrRelease(
+        env,
+        timing.localDate,
+        subscription.device_id,
+        claimToken,
+        now
+      );
     })
   );
   await env.DB

@@ -26,6 +26,7 @@ class TestStatement {
     private readonly database: DatabaseSync,
     private readonly query: string,
     private readonly values: SqlValue[] = [],
+    private readonly beforeRun?: (query: string) => void,
     private readonly afterRun?: (query: string) => void
   ) {}
 
@@ -34,6 +35,7 @@ class TestStatement {
       this.database,
       this.query,
       values,
+      this.beforeRun,
       this.afterRun
     ) as unknown as D1PreparedStatement;
   }
@@ -50,6 +52,7 @@ class TestStatement {
   }
 
   async run<T>(): Promise<D1Result<T>> {
+    this.beforeRun?.(this.query);
     const result = this.database.prepare(this.query).run(...this.values);
     this.afterRun?.(this.query);
     return {
@@ -62,6 +65,7 @@ class TestStatement {
 
 class TestD1 {
   readonly sqlite = new DatabaseSync(":memory:");
+  beforeRun?: (query: string) => void;
   afterRun?: (query: string) => void;
 
   constructor() {
@@ -94,6 +98,7 @@ class TestD1 {
       this.sqlite,
       query,
       [],
+      (executedQuery) => this.beforeRun?.(executedQuery),
       (executedQuery) => this.afterRun?.(executedQuery)
     ) as unknown as D1PreparedStatement;
   }
@@ -196,6 +201,48 @@ describe("未達通知Worker", () => {
       { endpoint: "https://fcm.googleapis.com/fcm/send/retry" },
       { endpoint: "https://fcm.googleapis.com/fcm/send/test" }
     ]);
+  });
+
+  it("既知のPush失敗をDBへ記録できなくても後続Cronで再試行する", async () => {
+    let failedResultWrite = false;
+    database.beforeRun = (query) => {
+      if (
+        !failedResultWrite &&
+        query.includes("UPDATE notification_delivery_subscriptions") &&
+        query.includes("SET status = ?")
+      ) {
+        failedResultWrite = true;
+        throw new Error("temporary D1 failure");
+      }
+    };
+    let firstRequest = true;
+    const fetchMock = vi.fn(async () => {
+      if (firstRequest) {
+        firstRequest = false;
+        return new Response(null, { status: 503 });
+      }
+      return new Response(null, { status: 201 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      processReminder(env, new Date("2026-09-23T11:05:00.000Z"))
+    ).resolves.toBe(0);
+    expect(failedResultWrite).toBe(true);
+    expect(
+      database.sqlite
+        .prepare(
+          `SELECT COUNT(*) AS count
+           FROM notification_delivery_subscriptions`
+        )
+        .get()
+    ).toEqual({ count: 0 });
+
+    database.beforeRun = undefined;
+    await expect(
+      processReminder(env, new Date("2026-09-23T11:10:00.000Z"))
+    ).resolves.toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("同時起動しても購読ごとのclaimを取れた1回だけ送る", async () => {
