@@ -16,7 +16,7 @@
 | 種別 | 内訳 |
 |---|---|
 | スターター (オンプレミス) カード | 各色10枚×4色: Bare Metal Host×3, Document Store, Networking, Data Warehouse, SAN, Corporate Identity Provider, Virtual Machine, Database Server |
-| ビルダーカード | 91枚・36種 (コストなし/ありで2山)。Lambda×6, EC2×8, S3×4, CDK×4, DynamoDB/SNS/SQS/CloudFormation×3, 他×2 |
+| ビルダーカード | 91枚・36種 (コストなし/ありで2山)。Lambda×6, EC2×8, S3×4, CDK×4, DynamoDB/SNS/SQS/IAM Identity Center/CloudFormation×3, 残り27種×2。英語版は IAM Identity Center×4 等の差異あり (日本語版の内訳を採用) |
 | Well-Architectedカード | 1pt×7 + 3pt×5 = 12枚 (山は1ptが上、上からしか取れない) |
 
 ### 状態
@@ -95,6 +95,7 @@ type CardDef = {
   effects: Effect[];             // 下記DSL
   // { type:'credits'|'draw'|'adoption'|'discardToTop'|'retireSelf',
   //   value?, condition?: { combinable: Category|cardId|'any', scope:'one'|'each', mode:'link'|'stack' } }
+  role: string;                  // テンプレ解説用の短文 (例: 'サーバーレス関数実行')
   descriptionJa: string;         // 独自の解説文
 };
 ```
