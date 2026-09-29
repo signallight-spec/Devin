@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  addLocalDays,
   isStudySubject,
+  localDateInTokyo,
   STUDY_SUBJECTS,
   type StudySubject
 } from "../../shared/domain";
@@ -19,6 +21,7 @@ import {
 import { StatusMessage } from "../components/StatusMessage";
 import { FamilyKeyQrCode } from "../components/FamilyKeyQrCode";
 import { dateTime, shortDate, yen } from "../format";
+import { nextHomeRefreshDelay } from "../homeRefresh";
 import { syncExistingPushSubscription } from "../push";
 import type {
   Achievement,
@@ -27,6 +30,8 @@ import type {
   Payment,
   Settlement
 } from "../types";
+
+const DATE_REFRESH_RETRY_MS = 30_000;
 
 function ParentLogin({
   initialMessage,
@@ -108,6 +113,8 @@ export function ParentScreen() {
   });
   const [suggestionSubject, setSuggestionSubject] =
     useState<StudySubject>(STUDY_SUBJECTS[0]);
+  const latestLoadId = useRef(0);
+  const suggestionRevision = useRef(0);
 
   const expireParentSession = useCallback((error: unknown): boolean => {
     if (!(error instanceof ApiError) || error.status !== 403) {
@@ -126,6 +133,9 @@ export function ParentScreen() {
       refreshFailureMessage?: string;
     } = {}
   ) => {
+    const loadId = latestLoadId.current + 1;
+    latestLoadId.current = loadId;
+    const suggestionRevisionAtStart = suggestionRevision.current;
     if (!options.preserveMessage) {
       setMessage("");
     }
@@ -137,7 +147,16 @@ export function ParentScreen() {
           api.rules(),
           api.payments()
         ]);
-      setDashboard(nextDashboard);
+      if (loadId !== latestLoadId.current) {
+        return false;
+      }
+      setDashboard((value) => ({
+        ...nextDashboard,
+        nextSuggestion:
+          suggestionRevisionAtStart === suggestionRevision.current
+            ? nextDashboard.nextSuggestion
+            : value?.nextSuggestion ?? nextDashboard.nextSuggestion
+      }));
       setAchievements(achievementResult.items);
       setRules(ruleResult.items);
       setPayments(paymentResult.items);
@@ -146,10 +165,16 @@ export function ParentScreen() {
         bonusAmountYen: nextDashboard.currentAllowanceRule.bonusAmountYen
       });
       setNotificationForm(nextDashboard.notificationSettings);
-      setSuggestionSubject(
-        nextDashboard.nextSuggestion.subject ?? STUDY_SUBJECTS[0]
-      );
+      if (suggestionRevisionAtStart === suggestionRevision.current) {
+        setSuggestionSubject(
+          nextDashboard.nextSuggestion.subject ?? STUDY_SUBJECTS[0]
+        );
+      }
+      return true;
     } catch (error) {
+      if (loadId !== latestLoadId.current) {
+        return false;
+      }
       if (!expireParentSession(error)) {
         setTone(options.refreshFailureMessage ? "info" : "error");
         setMessage(
@@ -157,6 +182,7 @@ export function ParentScreen() {
           (error instanceof Error ? error.message : "読み込みに失敗しました。")
         );
       }
+      return false;
     }
   }, [expireParentSession]);
 
@@ -165,6 +191,53 @@ export function ParentScreen() {
       void load();
     }
   }, [authenticated, load]);
+
+  const displayedTargetDate = dashboard?.nextSuggestion.targetDate;
+  useEffect(() => {
+    if (!displayedTargetDate) {
+      return;
+    }
+    const displayedLocalDate = addLocalDays(displayedTargetDate, -1);
+    let timeoutId: number;
+    let cancelled = false;
+    const refreshIfDateChanged = () => {
+      window.clearTimeout(timeoutId);
+      if (localDateInTokyo(new Date()) !== displayedLocalDate) {
+        void load({ preserveMessage: true }).then((loaded) => {
+          const delay = nextHomeRefreshDelay(
+            new Date(),
+            displayedLocalDate,
+            loaded
+          );
+          if (!cancelled && delay !== null) {
+            timeoutId = window.setTimeout(refreshIfDateChanged, delay);
+          }
+        });
+        return;
+      }
+      timeoutId = window.setTimeout(
+        refreshIfDateChanged,
+        nextHomeRefreshDelay(new Date(), displayedLocalDate, false) ??
+          DATE_REFRESH_RETRY_MS
+      );
+    };
+    timeoutId = window.setTimeout(
+      refreshIfDateChanged,
+      nextHomeRefreshDelay(new Date(), displayedLocalDate, false) ??
+        DATE_REFRESH_RETRY_MS
+    );
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshIfDateChanged();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [displayedTargetDate, load]);
 
   const settle = async () => {
     setBusy(true);
@@ -286,6 +359,7 @@ export function ParentScreen() {
     try {
       const nextSuggestion =
         await api.updateNextSuggestion(suggestionSubject);
+      suggestionRevision.current += 1;
       setDashboard((value) => value ? {
         ...value,
         nextSuggestion
@@ -557,6 +631,7 @@ export function ParentScreen() {
         <label>
           おすすめ科目
           <select
+            disabled={busy || !dashboard}
             onChange={(event) => {
               if (isStudySubject(event.target.value)) {
                 setSuggestionSubject(event.target.value);
@@ -571,7 +646,7 @@ export function ParentScreen() {
         </label>
         <button
           className="secondary-button"
-          disabled={busy}
+          disabled={busy || !dashboard}
           onClick={saveNextSuggestion}
           type="button"
         >
