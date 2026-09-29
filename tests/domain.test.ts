@@ -3,6 +3,7 @@ import {
   calculateCharacterState,
   calculateReward,
   calculateStreak,
+  characterMood,
   characterSpeciesForCycle,
   displayedStreak,
   localDateInTokyo,
@@ -86,16 +87,28 @@ describe("学習記録の計算", () => {
   });
 
   it("累計達成日数から卵・孵化・成獣の段階を計算する", () => {
-    expect(calculateCharacterState(0, 0, 123).stage).toBe("egg");
-    expect(calculateCharacterState(3, 3, 123).stage).toBe("cracked");
-    expect(calculateCharacterState(7, 7, 123).stage).toBe("hatchling");
-    expect(calculateCharacterState(14, 14, 123).stage).toBe("juvenile");
-    expect(calculateCharacterState(30, 30, 123)).toMatchObject({
+    expect(
+      calculateCharacterState(0, 0, 123, null, "2026-09-23").stage
+    ).toBe("egg");
+    expect(
+      calculateCharacterState(3, 3, 123, "2026-09-23", "2026-09-23").stage
+    ).toBe("cracked");
+    expect(
+      calculateCharacterState(7, 7, 123, "2026-09-23", "2026-09-23").stage
+    ).toBe("hatchling");
+    expect(
+      calculateCharacterState(14, 14, 123, "2026-09-23", "2026-09-23").stage
+    ).toBe("juvenile");
+    expect(
+      calculateCharacterState(30, 30, 123, "2026-09-23", "2026-09-23")
+    ).toMatchObject({
       stage: "adult",
       cycleProgressDays: 30,
       nextStageAt: null
     });
-    expect(calculateCharacterState(31, 1, 123)).toMatchObject({
+    expect(
+      calculateCharacterState(31, 1, 123, "2026-09-23", "2026-09-23")
+    ).toMatchObject({
       stage: "egg",
       cycleProgressDays: 1
     });
@@ -110,9 +123,44 @@ describe("学習記録の計算", () => {
   });
 
   it("連続日数を一時的な育成演出へ変換する", () => {
-    expect(calculateCharacterState(10, 2, 123).streakDecoration).toBe("none");
-    expect(calculateCharacterState(10, 3, 123).streakDecoration).toBe("stars");
-    expect(calculateCharacterState(10, 7, 123).streakDecoration).toBe("crown");
-    expect(calculateCharacterState(10, 14, 123).streakDecoration).toBe("aura");
+    expect(
+      calculateCharacterState(10, 2, 123, "2026-09-23", "2026-09-23")
+        .streakDecoration
+    ).toBe("none");
+    expect(
+      calculateCharacterState(10, 3, 123, "2026-09-23", "2026-09-23")
+        .streakDecoration
+    ).toBe("stars");
+    expect(
+      calculateCharacterState(10, 7, 123, "2026-09-23", "2026-09-23")
+        .streakDecoration
+    ).toBe("crown");
+    expect(
+      calculateCharacterState(10, 14, 123, "2026-09-23", "2026-09-23")
+        .streakDecoration
+    ).toBe("aura");
+  });
+
+  it("最新の達成日からキャラの機嫌を導く", () => {
+    expect(characterMood("2026-09-23", "2026-09-23")).toBe("full");
+    expect(characterMood("2026-09-22", "2026-09-23")).toBe("hungry");
+    expect(characterMood(null, "2026-09-23")).toBe("hungry");
+    expect(characterMood("2026-09-21", "2026-09-23")).toBe("famished");
+    expect(characterMood("2026-08-01", "2026-09-23")).toBe("famished");
+  });
+
+  it("月を跨ぐ日付でもキャラの機嫌を正しく判定する", () => {
+    expect(characterMood("2026-08-31", "2026-09-01")).toBe("hungry");
+    expect(characterMood("2026-08-30", "2026-09-01")).toBe("famished");
+    expect(characterMood("2026-09-01", "2026-09-01")).toBe("full");
+  });
+
+  it("キャラ状態に機嫌が含まれる", () => {
+    expect(
+      calculateCharacterState(5, 5, 123, "2026-09-22", "2026-09-23").mood
+    ).toBe("hungry");
+    expect(
+      calculateCharacterState(5, 5, 123, "2026-09-23", "2026-09-23").mood
+    ).toBe("full");
   });
 });

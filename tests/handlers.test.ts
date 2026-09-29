@@ -200,7 +200,7 @@ describe("APIハンドラー", () => {
   it("今日の状態へ育成情報と通知設定を含める", async () => {
     const response = await handleApi(request("/today", {}, familyKey), env);
     const body = await responseJson<{
-      character: { stage: string; cycleProgressDays: number };
+      character: { stage: string; cycleProgressDays: number; mood: string };
       notification: {
         enabled: boolean;
         time: string;
@@ -211,7 +211,8 @@ describe("APIハンドラー", () => {
 
     expect(body.character).toMatchObject({
       stage: "egg",
-      cycleProgressDays: 0
+      cycleProgressDays: 0,
+      mood: "hungry"
     });
     expect(body.notification).toEqual({
       enabled: true,
@@ -931,18 +932,22 @@ describe("APIハンドラー", () => {
     const firstBody = await responseJson<{
       created: boolean;
       achievement: { id: string };
+      character: { mood: string };
     }>(first);
     const secondBody = await responseJson<{
       created: boolean;
       achievement: { id: string };
+      character: { mood: string };
     }>(second);
 
     expect(first.status).toBe(201);
     expect(firstBody.created).toBe(true);
+    expect(firstBody.character.mood).toBe("full");
     expect(second.status).toBe(200);
     expect(secondBody).toEqual({
       created: false,
-      achievement: expect.objectContaining({ id: firstBody.achievement.id })
+      achievement: expect.objectContaining({ id: firstBody.achievement.id }),
+      character: expect.objectContaining({ mood: "full" })
     });
   });
 

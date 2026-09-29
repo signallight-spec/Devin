@@ -2,6 +2,7 @@ import type {
   Achievement,
   AllowanceRule,
   CalendarData,
+  CharacterState,
   ParentDashboard,
   Payment,
   Settlement,
@@ -234,7 +235,11 @@ export const api = {
     note: string | null;
     targetMinutes?: number;
   }) {
-    return apiRequest<{ created: boolean; achievement: Achievement }>(
+    return apiRequest<{
+      created: boolean;
+      achievement: Achievement;
+      character: CharacterState;
+    }>(
       "/achievements",
       { method: "POST", body: JSON.stringify(input) }
     );

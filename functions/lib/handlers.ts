@@ -155,11 +155,34 @@ async function requireFamilyKey(
   throw new HttpError(401, "INVALID_FAMILY_KEY", "家族キーが無効です。");
 }
 
-async function latestStreak(
+async function currentCharacter(
   db: D1Database,
+  settings: AppSettingsRow,
   today: string
-): Promise<number> {
-  const latest = await db
+): Promise<ReturnType<typeof calculateCharacterState>> {
+  const [latest, total] = await Promise.all([
+    latestAchievement(db),
+    db
+      .prepare("SELECT COUNT(*) AS count FROM achievements")
+      .first<{ count: number }>()
+  ]);
+  return calculateCharacterState(
+    total?.count ?? 0,
+    displayedStreak(
+      latest?.local_date ?? null,
+      latest?.streak_days ?? null,
+      today
+    ),
+    settings.character_seed,
+    latest?.local_date ?? null,
+    today
+  );
+}
+
+async function latestAchievement(
+  db: D1Database
+): Promise<LatestStreakRow | null> {
+  return db
     .prepare(
       `SELECT local_date, streak_days
        FROM achievements
@@ -167,11 +190,6 @@ async function latestStreak(
        LIMIT 1`
     )
     .first<LatestStreakRow>();
-  return displayedStreak(
-    latest?.local_date ?? null,
-    latest?.streak_days ?? null,
-    today
-  );
 }
 
 async function handleSetup(request: Request, env: Env, now: Date): Promise<Response> {
@@ -276,18 +294,23 @@ async function handleToday(
 ): Promise<Response> {
   const nowIso = now.toISOString();
   const today = localDateInTokyo(now);
-  const [rule, achievement, currentStreakDays, total] = await Promise.all([
+  const [rule, achievement, latest, total] = await Promise.all([
     getCurrentRule(env.DB, nowIso),
     env.DB
       .prepare(`${ACHIEVEMENT_WITH_PAID} WHERE a.local_date = ? LIMIT 1`)
       .bind(today)
       .first<AchievementRow>(),
-    latestStreak(env.DB, today),
+    latestAchievement(env.DB),
     env.DB
       .prepare("SELECT COUNT(*) AS count FROM achievements")
       .first<{ count: number }>()
   ]);
   requireRule(rule);
+  const currentStreakDays = displayedStreak(
+    latest?.local_date ?? null,
+    latest?.streak_days ?? null,
+    today
+  );
   const scheduledSuggestion =
     settings.next_suggestion_date === today
       ? settings.next_suggestion
@@ -305,7 +328,9 @@ async function handleToday(
     character: calculateCharacterState(
       total?.count ?? 0,
       currentStreakDays,
-      settings.character_seed
+      settings.character_seed,
+      latest?.local_date ?? null,
+      today
     ),
     notification: {
       enabled: Boolean(settings.notifications_enabled),
@@ -526,7 +551,11 @@ async function handleCreateAchievement(
     .bind(today)
     .first<AchievementRow>();
   if (existing) {
-    return json({ created: false, achievement: mapAchievement(existing) });
+    return json({
+      created: false,
+      achievement: mapAchievement(existing),
+      character: await currentCharacter(env.DB, settings, today)
+    });
   }
 
   const nowIso = now.toISOString();
@@ -585,7 +614,11 @@ async function handleCreateAchievement(
       .bind(today)
       .first<AchievementRow>();
     if (concurrent) {
-      return json({ created: false, achievement: mapAchievement(concurrent) });
+      return json({
+        created: false,
+        achievement: mapAchievement(concurrent),
+        character: await currentCharacter(env.DB, settings, today)
+      });
     }
     throw new HttpError(500, "CREATE_FAILED", "達成記録を保存できませんでした。");
   }
@@ -596,7 +629,14 @@ async function handleCreateAchievement(
   if (!created) {
     throw new HttpError(500, "CREATE_FAILED", "達成記録を読み込めませんでした。");
   }
-  return json({ created: true, achievement: mapAchievement(created) }, 201);
+  return json(
+    {
+      created: true,
+      achievement: mapAchievement(created),
+      character: await currentCharacter(env.DB, settings, today)
+    },
+    201
+  );
 }
 
 async function handleCalendar(url: URL, env: Env, now: Date): Promise<Response> {
@@ -610,7 +650,7 @@ async function handleCalendar(url: URL, env: Env, now: Date): Promise<Response> 
     achievements,
     weekly,
     unpaid,
-    currentStreakDays,
+    latest,
     total,
     settings
   ] = await Promise.all([
@@ -636,7 +676,7 @@ async function handleCalendar(url: URL, env: Env, now: Date): Promise<Response> 
          FROM unpaid_achievements`
       )
       .first<{ amount: number }>(),
-    latestStreak(env.DB, today),
+    latestAchievement(env.DB),
     env.DB
       .prepare("SELECT COUNT(*) AS count FROM achievements")
       .first<{ count: number }>(),
@@ -645,6 +685,11 @@ async function handleCalendar(url: URL, env: Env, now: Date): Promise<Response> 
   if (!settings) {
     throw new HttpError(409, "SETUP_REQUIRED", "初期設定が必要です。");
   }
+  const currentStreakDays = displayedStreak(
+    latest?.local_date ?? null,
+    latest?.streak_days ?? null,
+    today
+  );
   return json({
     month,
     currentStreakDays,
@@ -655,7 +700,9 @@ async function handleCalendar(url: URL, env: Env, now: Date): Promise<Response> 
     character: calculateCharacterState(
       total?.count ?? 0,
       currentStreakDays,
-      settings.character_seed
+      settings.character_seed,
+      latest?.local_date ?? null,
+      today
     )
   });
 }
@@ -774,7 +821,7 @@ async function handleParentSession(
 
 async function handleParentDashboard(env: Env, now: Date): Promise<Response> {
   const today = localDateInTokyo(now);
-  const [aggregate, rule, currentStreakDays, settings] = await Promise.all([
+  const [aggregate, rule, latest, settings] = await Promise.all([
     env.DB
       .prepare(
         `SELECT
@@ -786,13 +833,18 @@ async function handleParentDashboard(env: Env, now: Date): Promise<Response> {
       )
       .first<AggregateRow>(),
     getCurrentRule(env.DB, now.toISOString()),
-    latestStreak(env.DB, today),
+    latestAchievement(env.DB),
     getSettings(env.DB)
   ]);
   requireRule(rule);
   if (!settings) {
     throw new HttpError(409, "SETUP_REQUIRED", "初期設定が必要です。");
   }
+  const currentStreakDays = displayedStreak(
+    latest?.local_date ?? null,
+    latest?.streak_days ?? null,
+    today
+  );
   const targetDate = addLocalDays(today, 1);
   return json({
     unpaidBalanceYen: aggregate?.amount ?? 0,

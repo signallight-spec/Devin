@@ -1,4 +1,5 @@
 import type {
+  CharacterMood,
   CharacterSpecies,
   CharacterStage,
   StreakDecoration
@@ -59,6 +60,12 @@ export const DECORATION_LABEL: Record<StreakDecoration, string> = {
   stars: "連続達成の星",
   crown: "7日連続の冠",
   aura: "14日連続のオーラ"
+};
+
+export const MOOD_MESSAGE: Record<CharacterMood, string | null> = {
+  full: null,
+  hungry: "おなかがすいています。今日の学習をまっています。",
+  famished: "ぐったりしています。記録して元気にしてあげよう。"
 };
 
 export function nextGrowthMessage(

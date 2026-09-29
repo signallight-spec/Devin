@@ -4,9 +4,11 @@ import {
   CHARACTER_SPECIES,
   CHARACTER_STAGE,
   DECORATION_LABEL,
+  MOOD_MESSAGE,
   nextGrowthMessage
 } from "../characters";
 import type {
+  CharacterMood,
   CharacterSpecies,
   CharacterStage,
   CharacterState,
@@ -26,11 +28,13 @@ function CharacterSprite({
   species,
   stage,
   decoration = "none",
+  mood = "full",
   muted = false
 }: {
   species: CharacterSpecies;
   stage: CharacterStage;
   decoration?: StreakDecoration;
+  mood?: CharacterMood;
   muted?: boolean;
 }) {
   const decorationMark =
@@ -44,7 +48,7 @@ function CharacterSprite({
   return (
     <div
       aria-label={`${CHARACTER_META[species].name}・${CHARACTER_STAGE[stage].name}`}
-      className={`character-sprite${muted ? " muted" : ""} decoration-${decoration}`}
+      className={`character-sprite${muted ? " muted" : ""} decoration-${decoration} mood-${mood}`}
       role="img"
       style={spriteStyle(species, stage)}
     >
@@ -67,6 +71,7 @@ export function CharacterCard({ character }: { character: CharacterState }) {
       <div className="character-visual">
         <CharacterSprite
           decoration={character.streakDecoration}
+          mood={character.mood}
           species={character.species}
           stage={character.stage}
         />
@@ -106,6 +111,11 @@ export function CharacterCard({ character }: { character: CharacterState }) {
         {character.streakDecoration !== "none" && (
           <p className="decoration-copy">
             {DECORATION_LABEL[character.streakDecoration]}をまとっています。
+          </p>
+        )}
+        {MOOD_MESSAGE[character.mood] && (
+          <p className={`mood-copy mood-${character.mood}`}>
+            {MOOD_MESSAGE[character.mood]}
           </p>
         )}
       </div>
