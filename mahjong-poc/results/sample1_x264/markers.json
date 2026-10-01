@@ -1,0 +1,92 @@
+[
+ {
+  "t": 11.466666666666667,
+  "label": "tedashi",
+  "player": "self"
+ },
+ {
+  "t": 18.0,
+  "label": "tsumogiri?",
+  "player": "self"
+ },
+ {
+  "t": 38.4,
+  "label": "tsumogiri?",
+  "player": "self"
+ },
+ {
+  "t": 211.86666666666667,
+  "label": "tedashi",
+  "player": "self"
+ },
+ {
+  "t": 220.8,
+  "label": "opp",
+  "player": "across"
+ },
+ {
+  "t": 225.2,
+  "label": "opp",
+  "player": "across"
+ },
+ {
+  "t": 248.8,
+  "label": "tsumogiri",
+  "player": "self"
+ },
+ {
+  "t": 261.6,
+  "label": "tsumogiri",
+  "player": "self"
+ },
+ {
+  "t": 290.5333333333333,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 307.8666666666667,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 326.66666666666663,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 349.73333333333335,
+  "label": "tedashi",
+  "player": "self"
+ },
+ {
+  "t": 401.0,
+  "label": "opp",
+  "player": "right"
+ },
+ {
+  "t": 413.73333333333335,
+  "label": "tedashi",
+  "player": "self"
+ },
+ {
+  "t": 431.73333333333335,
+  "label": "tsumogiri",
+  "player": "self"
+ },
+ {
+  "t": 513.0666666666667,
+  "label": "tsumogiri",
+  "player": "self"
+ },
+ {
+  "t": 544.0666666666666,
+  "label": "opp",
+  "player": "unknown"
+ },
+ {
+  "t": 551.2,
+  "label": "tedashi",
+  "player": "self"
+ }
+]
