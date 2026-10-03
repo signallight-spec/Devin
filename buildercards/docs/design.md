@@ -4,9 +4,9 @@
 
 - ルール: 日本語版第2版 (Ja_rules_2026.pdf 準拠)
 - 対戦形式: **1人プレイ vs CPU (2人対戦)**
-- ネット接続: **利用OK前提**。CPUの解説生成にLLMを使う。ただしゲームエンジン自体はブラウザ内で完結させ、オフライン時はテンプレ解説にフォールバックして対戦自体は継続可能にする
+- ネット接続: **利用OK前提**。両プレイヤーのデプロイ解説をLLM (Google Gemini) で生成。ただしゲームエンジン自体はブラウザ内で完結させ、オフライン時はテンプレ解説にフォールバックして対戦自体は継続可能にする
 - 置き場所: 既存リポジトリ `signallight-spec/Devin` 内 (例: `buildercards/` ディレクトリに独立したViteアプリとして追加)
-- 対象外: ミッションカード (日本語版に未同梱)、コレクション用カード、3〜4人プレイ
+- 対象外: ミッションカード (日本語版に未同梱)、コレクション用カード、3〜4人プレイ、上級ルール (builderリタイア/長期戦モード — v1では実装しないが後付け用の拡張ポイントを残す)
 - 権利面: 個人・学習用途前提。公式のカード画像・テキストは転用せず、カード名と効果のみデータ化し独自UIで描画
 
 ## ゲームモデル
@@ -52,11 +52,12 @@ GameState {
 3. **終了フェーズ**: 全カードを捨て札へ → 5枚ドロー。山札切れは捨て札シャッフルで再構成
 4. **終了条件**: WA山が尽きる。同点ならbuilder枚数で決着
 
-### オプションルール
+### オプションルール (v1対象外、拡張ポイントのみ確保)
 
 - builderカードのリタイア (builder購入歴あり・そのターン使用済み不可・手札のみ)
 - 全員同意のコンソールシャッフル (CPU対戦では常時許可)
 - WAを捨て札に入れる長期戦モード
+- **拡張ポイント**: エンジン初期化時に `GameConfig { rules: { builderRetire?: boolean, waIntoDiscard?: boolean, consoleShuffle?: boolean } }` を受ける形にし、リタイア処理・adoption後のWA移動先・山札再構成をフック可能に設計。v1は全フラグoffで出荷
 
 ## CPU設計
 
@@ -72,9 +73,9 @@ GameState {
 
 ### 解説 (AWS知識の披露) ★ユーザー要件
 
-デプロイしたアーキテクチャを自然言語で説明する:
+**両プレイヤー**のデプロイについてアーキテクチャを自然言語で説明する:
 
-- **LLM生成 (メイン)**: デプロイ構成 (カード名+接続関係+発動効果) をプロンプトに入れ、「このアーキテクチャは何をするものか」「なぜこの組み合わせか」を生成。Cloudflare Pages Functions経由でLLM APIを呼ぶ (APIキーはサーバー側に隠蔽)
+- **LLM生成 (メイン)**: Google Gemini (軽量モデル、Flash系想定)。デプロイ構成 (カード名+接続関係+発動効果) をプロンプトに入れ、「このアーキテクチャは何をするものか」「なぜこの組み合わせか」を生成。Cloudflare Pages Functions経由でAPIを呼ぶ (`GEMINI_API_KEY` はPagesの環境変数に設定しサーバー側に隠蔽)
 - **テンプレ生成 (フォールバック)**: カードに `category` (スキーマの `Category` 値 = AWS公式カテゴリ名 + `other`) と `role` (短文) を持たせ、既知パターン辞書 (静的サイト配信=S3+CloudFront、サーバーレスAPI=API Gateway+Lambda+DynamoDB、3層=ELB+EC2+RDS、イベント駆動=SNS/SQS+Lambda 等) でマッチングして説明文を組み立てる。オフライン/LLM障害時はこちら
 - プレイヤー側のデプロイにも同じ仕組みで「このアーキテクチャは…」と解説を付けられると学習効果が高い (要検討)
 
@@ -110,7 +111,7 @@ type CardDef = {
 - **ゲームエンジン**: 純粋TS (`buildercards/src/engine/`)。`reduce(state, action) → state`、シード付きRNG。UI非依存 → 単体テスト・CPU思考・将来のMCTSで再利用
 - **バックエンド**: Cloudflare Pages Functions (`buildercards/functions/`) — LLMプロキシのみ。ゲーム進行に必須ではない
 - **UI**: 中央=コンソール (5スロット+WA山)、手前=自分エリア、奥=CPUエリア (手札は裏)。デプロイはドラッグ/クリックでカードを並べて接続を宣言、右パネルに解説テキストと行動ログ
-- **LLMプロバイダ**: 候補は軽量なモデル (Claude Haiku系/GPT-mini系)。`ANTHROPIC_API_KEY` 等をPagesの環境変数に設定する形を想定
+- **LLMプロバイダ**: Google Gemini (Flash系想定)。`GEMINI_API_KEY` をPagesの環境変数に設定 (キーはユーザーが用意)
 
 ## 作業分解案 (Issue単位)
 
@@ -173,8 +174,8 @@ type CardDef = {
 
 構成例から推定されるコンボ値 (暫定): API Gateway 1+1, DynamoDB 2+2, EventBridge 2+2, SQS 2+2, SNS 2+2, ELB 2+2, RDS 2+2, EC2 Auto Scaling 2+4, Aurora 2+1, ElastiCache 2+2, Step Functions 1+2, CloudWatch 2+4, Redshift 2+2。スターターのコンボ: VM+Bare Metal Host→+1ドロー、Corporate IdP+IAM Identity Center→+1adoption
 
-## 残りの確認事項
+## 決定事項
 
-1. LLMプロバイダとAPIキー (用意できますか? Anthropic / OpenAI / その他)
-2. 上級ルール (builderリタイア/長期戦モード) は初版に含めますか?
-3. プレイヤー側のデプロイにも解説生成を付けますか?
+1. LLMプロバイダ: **Google Gemini** (APIキーはユーザーが用意 → `GEMINI_API_KEY`)
+2. 上級ルール (builderリタイア/長期戦モード): **v1対象外**。拡張ポイントのみ残す (オプションルール節参照)
+3. 解説生成: **両プレイヤーのデプロイに付ける**
