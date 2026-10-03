@@ -101,7 +101,7 @@ type CardDef = {
 };
 ```
 
-- `category` はAWS公式のサービスカテゴリをそのまま採用 (compute / containers / storage / application integration / networking & content delivery / database / analytics / management & governance / security, identity & compliance / developer tools / cloud financial management / on-premises)
+- `category` はAWS公式のサービスカテゴリをそのまま採用 (compute / containers / storage / application integration / networking & content delivery / database / analytics / management & governance / security, identity & compliance / developer tools / cloud financial management / on-premises)。公式カテゴリを持たない AWS Marketplace 専用に `other` を1つ追加し、カテゴリを条件にするコンボ/テンプレ効果の対象外とする
 - 効果の暫定データは、構成例から判明したコンボ値 (付録) と判明済みの例 (RDS↔computeで+2、IAM Identity Center↔Corporate Identity Providerで+adoption、Virtual Machine↔Bare Metal Hostで+1ドロー) を反映して作る
 
 ## 技術構成
@@ -156,7 +156,7 @@ type CardDef = {
 | Amazon CloudWatch | 2 | management & governance | 2 |
 | AWS IAM Identity Center | 4 | security, identity & compliance | 2 |
 | Amazon CodeCatalyst | 2 | developer tools | 2 |
-| AWS Marketplace | 2 | (なし) | 1 |
+| AWS Marketplace | 2 | other | 1 |
 
 コストあり (14枚 / 6種):
 
