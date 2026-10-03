@@ -16,7 +16,7 @@
 | 種別 | 内訳 |
 |---|---|
 | スターター (オンプレミス) カード | 各色10枚×4色: Bare Metal Host×3, Document Store, Networking, Data Warehouse, SAN, Corporate Identity Provider, Virtual Machine, Database Server |
-| ビルダーカード | 91枚・36種 (コストなし/ありで2山)。Lambda×6, EC2×8, S3×4, CDK×4, DynamoDB/SNS/SQS/IAM Identity Center/CloudFormation×3, 残り27種×2。英語版は IAM Identity Center×4 等の差異あり (日本語版の内訳を採用) |
+| ビルダーカード | 91枚・36種 = コストなし77枚 (30種) + コストあり14枚 (6種)。内訳は付録の全カード一覧参照 |
 | Well-Architectedカード | 1pt×7 + 3pt×5 = 12枚 (山は1ptが上、上からしか取れない) |
 
 ### 状態
@@ -80,8 +80,9 @@ GameState {
 
 ## カードデータ
 
-- ルールブックには枚数一覧しかなく、91枚の効果テキストはカード実物にのみ記載。コミュニティのカードカタログ (buildercards.dev) はコレクターズカードのみで基本セット非対応
-- **方針: スキーマを先に定義し、暫定効果データで開発 → 実物到着後にデータだけ差し替え**
+- **データ源 (判明済み)**: Zennの解析記事 (https://zenn.dev/issy/articles/zenn-aws-buildercards) から、全36種のサービス名・枚数・AWS公式カテゴリ・基本クレジットが正確に取得可能 (付録参照)。コストあり/なしの分割も確定
+- **残りの未確定要素**: 各カードに印刷された効果条件文 (+1ドロー/+1adoption/リタイア後効果がどのカードに付いているか、コンボの厳密な条件)。構成例から一部コンボ値は推定可能 (付録)
+- **方針: 判明分は正確にデータ化、効果条件のみ暫定値で開発 → 実物到着後に確定版へ差し替え**
 - スキーマ案:
 
 ```ts
@@ -100,7 +101,8 @@ type CardDef = {
 };
 ```
 
-- 暫定データは実在カードの傾向 (RDS↔computeで+2、IAM Identity Center↔Corporate Identity Providerで+adoption 等、判明している例を反映) に寄せて作り、カード到着後に正確な値へ置き換える
+- `category` はAWS公式のサービスカテゴリをそのまま採用 (compute / containers / storage / application integration / networking & content delivery / database / analytics / management & governance / security, identity & compliance / developer tools / cloud financial management / on-premises)
+- 効果の暫定データは、構成例から判明したコンボ値 (付録) と判明済みの例 (RDS↔computeで+2、IAM Identity Center↔Corporate Identity Providerで+adoption、Virtual Machine↔Bare Metal Hostで+1ドロー) を反映して作る
 
 ## 技術構成
 
@@ -118,6 +120,56 @@ type CardDef = {
 4. CPU解説 (LLMプロキシ + テンプレフォールバック)
 5. UI (盤面・デプロイ操作・コンソール・解説パネル・ログ)
 6. 統合 + 対局フロー完成
+
+## 付録: 全カード一覧 (Zenn記事から収集)
+
+コストなし (77枚 / 30種):
+
+| サービス | 枚数 | カテゴリ | 基本クレジット |
+|---|---|---|---|
+| Amazon EC2 | 8 | compute | 2 |
+| AWS Lambda | 6 | compute | 1 |
+| AWS Fargate | 2 | containers | 3 |
+| Amazon ECS | 2 | containers | 2 |
+| Amazon EKS | 2 | containers | 2 |
+| Amazon S3 | 4 | storage | 2 |
+| Amazon EFS | 2 | storage | 2 |
+| Amazon SNS | 3 | application integration | 2 |
+| Amazon SQS | 3 | application integration | 2 |
+| Amazon EventBridge | 2 | application integration | 2 |
+| AWS Step Functions | 2 | application integration | 1 |
+| Amazon API Gateway | 2 | application integration | 1 |
+| Amazon Route 53 | 2 | networking & content delivery | 2 |
+| Amazon VPC | 2 | networking & content delivery | 2 |
+| Elastic Load Balancing | 2 | networking & content delivery | 2 |
+| Amazon CloudFront | 2 | networking & content delivery | 2 |
+| Amazon RDS | 2 | database | 2 |
+| Amazon Aurora | 2 | database | 2 |
+| Amazon DynamoDB | 3 | database | 2 |
+| Amazon ElastiCache | 2 | database | 2 |
+| Amazon Kinesis Data Streams | 2 | analytics | 2 |
+| Amazon Data Firehose | 2 | analytics | 2 |
+| Amazon Redshift | 2 | analytics | 2 |
+| Amazon Athena | 2 | analytics | 2 |
+| Amazon OpenSearch Service | 2 | analytics | 2 |
+| AWS CloudTrail | 2 | management & governance | 2 |
+| Amazon CloudWatch | 2 | management & governance | 2 |
+| AWS IAM Identity Center | 4 | security, identity & compliance | 2 |
+| Amazon CodeCatalyst | 2 | developer tools | 2 |
+| AWS Marketplace | 2 | (なし) | 1 |
+
+コストあり (14枚 / 6種):
+
+| サービス | 枚数 | カテゴリ | 基本クレジット |
+|---|---|---|---|
+| Amazon EC2 Auto Scaling | 2 | compute | 2 |
+| AWS CDK | 3 | developer tools | 1 |
+| AWS CloudFormation | 2 | management & governance | 2 |
+| AWS Systems Manager | 3 | management & governance | 2 |
+| AWS Well-Architected Tool | 2 | management & governance | 1 |
+| Cloud Financial Management | 2 | cloud financial management | 2 |
+
+構成例から推定されるコンボ値 (暫定): API Gateway 1+1, DynamoDB 2+2, EventBridge 2+2, SQS 2+2, SNS 2+2, ELB 2+2, RDS 2+2, EC2 Auto Scaling 2+4, Aurora 2+1, ElastiCache 2+2, Step Functions 1+2, CloudWatch 2+4, Redshift 2+2。スターターのコンボ: VM+Bare Metal Host→+1ドロー、Corporate IdP+IAM Identity Center→+1adoption
 
 ## 残りの確認事項
 
