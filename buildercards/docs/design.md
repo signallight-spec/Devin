@@ -16,7 +16,7 @@
 | 種別 | 内訳 |
 |---|---|
 | スターター (オンプレミス) カード | 各色10枚×4色: Bare Metal Host×3, Document Store, Networking, Data Warehouse, SAN, Corporate Identity Provider, Virtual Machine, Database Server |
-| ビルダーカード | 91枚・36種 = コストなし77枚 (30種) + コストあり14枚 (6種)。内訳は付録の全カード一覧参照 |
+| ビルダーカード | 91枚・36種。**日本語版と英語版で枚数配分が異なる** (日本語版ルールブックの内訳を採用)。コストあり/なしの分割は英語版準拠の推定 (6種15枚)。内訳は付録の全カード一覧参照 |
 | Well-Architectedカード | 1pt×7 + 3pt×5 = 12枚 (山は1ptが上、上からしか取れない) |
 
 ### 状態
@@ -75,12 +75,12 @@ GameState {
 デプロイしたアーキテクチャを自然言語で説明する:
 
 - **LLM生成 (メイン)**: デプロイ構成 (カード名+接続関係+発動効果) をプロンプトに入れ、「このアーキテクチャは何をするものか」「なぜこの組み合わせか」を生成。Cloudflare Pages Functions経由でLLM APIを呼ぶ (APIキーはサーバー側に隠蔽)
-- **テンプレ生成 (フォールバック)**: カードに `category` (compute/storage/database/networking/integration/management/security/analytics) と `role` (短文) を持たせ、既知パターン辞書 (静的サイト配信=S3+CloudFront、サーバーレスAPI=API Gateway+Lambda+DynamoDB、3層=ELB+EC2+RDS、イベント駆動=SNS/SQS+Lambda 等) でマッチングして説明文を組み立てる。オフライン/LLM障害時はこちら
+- **テンプレ生成 (フォールバック)**: カードに `category` (スキーマの `Category` 値 = AWS公式カテゴリ名 + `other`) と `role` (短文) を持たせ、既知パターン辞書 (静的サイト配信=S3+CloudFront、サーバーレスAPI=API Gateway+Lambda+DynamoDB、3層=ELB+EC2+RDS、イベント駆動=SNS/SQS+Lambda 等) でマッチングして説明文を組み立てる。オフライン/LLM障害時はこちら
 - プレイヤー側のデプロイにも同じ仕組みで「このアーキテクチャは…」と解説を付けられると学習効果が高い (要検討)
 
 ## カードデータ
 
-- **データ源 (判明済み)**: Zennの解析記事 (https://zenn.dev/issy/articles/zenn-aws-buildercards) から、全36種のサービス名・枚数・AWS公式カテゴリ・基本クレジットが正確に取得可能 (付録参照)。コストあり/なしの分割も確定
+- **データ源**: 枚数は日本語版ルールブック (Ja_rules_2026.pdf) の内訳を正とする — Zennの解析記事 (https://zenn.dev/issy/articles/zenn-aws-buildercards) の表は英語版の配分で、日本語版と7種で枚数が異なる (付録)。サービス名・AWS公式カテゴリ・基本クレジット・コスト種別は同記事から取得可能
 - **残りの未確定要素**: 各カードに印刷された効果条件文 (+1ドロー/+1adoption/リタイア後効果がどのカードに付いているか、コンボの厳密な条件)。構成例から一部コンボ値は推定可能 (付録)
 - **方針: 判明分は正確にデータ化、効果条件のみ暫定値で開発 → 実物到着後に確定版へ差し替え**
 - スキーマ案:
@@ -123,7 +123,9 @@ type CardDef = {
 
 ## 付録: 全カード一覧 (Zenn記事から収集)
 
-コストなし (77枚 / 30種):
+枚数は**日本語版ルールブックの内訳** (英語版との差分: API Gateway 3←2, CloudWatch 3←2, EC2 Auto Scaling 3←2, CDK 4←3, DynamoDB 2←3, IAM Identity Center 2←4, Systems Manager 2←3)。コストあり/なしの分割とカテゴリ・基本クレジットはZenn記事 (英語版準拠) より。
+
+コストなし (76枚 / 30種):
 
 | サービス | 枚数 | カテゴリ | 基本クレジット |
 |---|---|---|---|
@@ -138,14 +140,14 @@ type CardDef = {
 | Amazon SQS | 3 | application integration | 2 |
 | Amazon EventBridge | 2 | application integration | 2 |
 | AWS Step Functions | 2 | application integration | 1 |
-| Amazon API Gateway | 2 | application integration | 1 |
+| Amazon API Gateway | 3 | application integration | 1 |
 | Amazon Route 53 | 2 | networking & content delivery | 2 |
 | Amazon VPC | 2 | networking & content delivery | 2 |
 | Elastic Load Balancing | 2 | networking & content delivery | 2 |
 | Amazon CloudFront | 2 | networking & content delivery | 2 |
 | Amazon RDS | 2 | database | 2 |
 | Amazon Aurora | 2 | database | 2 |
-| Amazon DynamoDB | 3 | database | 2 |
+| Amazon DynamoDB | 2 | database | 2 |
 | Amazon ElastiCache | 2 | database | 2 |
 | Amazon Kinesis Data Streams | 2 | analytics | 2 |
 | Amazon Data Firehose | 2 | analytics | 2 |
@@ -153,19 +155,19 @@ type CardDef = {
 | Amazon Athena | 2 | analytics | 2 |
 | Amazon OpenSearch Service | 2 | analytics | 2 |
 | AWS CloudTrail | 2 | management & governance | 2 |
-| Amazon CloudWatch | 2 | management & governance | 2 |
-| AWS IAM Identity Center | 4 | security, identity & compliance | 2 |
+| Amazon CloudWatch | 3 | management & governance | 2 |
+| AWS IAM Identity Center | 2 | security, identity & compliance | 2 |
 | Amazon CodeCatalyst | 2 | developer tools | 2 |
 | AWS Marketplace | 2 | other | 1 |
 
-コストあり (14枚 / 6種):
+コストあり (15枚 / 6種):
 
 | サービス | 枚数 | カテゴリ | 基本クレジット |
 |---|---|---|---|
-| Amazon EC2 Auto Scaling | 2 | compute | 2 |
-| AWS CDK | 3 | developer tools | 1 |
+| Amazon EC2 Auto Scaling | 3 | compute | 2 |
+| AWS CDK | 4 | developer tools | 1 |
 | AWS CloudFormation | 2 | management & governance | 2 |
-| AWS Systems Manager | 3 | management & governance | 2 |
+| AWS Systems Manager | 2 | management & governance | 2 |
 | AWS Well-Architected Tool | 2 | management & governance | 1 |
 | Cloud Financial Management | 2 | cloud financial management | 2 |
 
